@@ -4,6 +4,7 @@ import { GitError } from "../git/git.js";
 import { VERSION } from "../version.js";
 import { check } from "./commands/check.js";
 import { explain } from "./commands/explain.js";
+import { lock, refresh, relock } from "./commands/lock.js";
 import { status } from "./commands/status.js";
 import { EXIT } from "./exit-codes.js";
 import { processIo, type Io } from "./io.js";
@@ -42,6 +43,36 @@ export function buildProgram(io: Io, setExit: (code: number) => void): Command {
     .option("--no-run", "don't run check commands; validate only")
     .option("--json", "print JSON instead of text")
     .action((opts: { run: boolean; json?: boolean }) => setExit(check(io, opts)));
+
+  program
+    .command("lock")
+    .description(
+      "record current fingerprints in .capsules/capsules.lock; pins new links, never re-pins existing ones",
+    )
+    .option("--dry-run", "show what would change without writing")
+    .option("--json", "print JSON instead of text")
+    .action((opts: { dryRun?: boolean; json?: boolean }) => setExit(lock(io, opts)));
+
+  program
+    .command("refresh")
+    .description("after reviewing a node, re-pin the links FROM it to what they point at now")
+    .argument("<address>", "the node you reviewed, e.g. billing.invoices#D7")
+    .option("--dry-run", "show what would change without writing")
+    .option("--json", "print JSON instead of text")
+    .action((addr: string, opts: { dryRun?: boolean; json?: boolean }) =>
+      setExit(refresh(io, addr, opts)),
+    );
+
+  program
+    .command("relock")
+    .description("declare a change to a node cosmetic, re-pinning every link TO it (owners only)")
+    .argument("<address>", "the node whose change was cosmetic, e.g. billing.invoices#C1")
+    .option("--cosmetic", "required: confirms the change didn't change the meaning")
+    .option("--dry-run", "show what would change without writing")
+    .option("--json", "print JSON instead of text")
+    .action((addr: string, opts: { cosmetic?: boolean; dryRun?: boolean; json?: boolean }) =>
+      setExit(relock(io, addr, opts)),
+    );
 
   return program;
 }

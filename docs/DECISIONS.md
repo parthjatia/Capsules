@@ -107,3 +107,27 @@ Newest at the bottom. Entries are never edited, only superseded by a later entry
   - `E024` unknown link type word (was E006)
   - `E025` reference that can't be read (was E003)
 - **Why:** one code per situation makes messages, docs and `--json` consumers unambiguous.
+
+## D-012: Front matter fingerprint uses JSON Canonicalization (RFC 8785)
+
+- **Date:** 2026-11-16 · **Approved by:** Parth
+- **Changes:** C7.1 step 5
+- **Decision:** the `capsule` hash is SHA-256 of the RFC 8785 (JCS) serialisation of the parsed front matter, after CRLF→LF and NFC. Stored as 12 hex characters like node hashes.
+- **Why:** "re-serialised YAML" depends on a library's output format, which could change in an update and silently change every fingerprint. JCS is a published standard with a fixed output.
+
+## D-013: `relock --cosmetic` prints the trailer instead of committing
+
+- **Date:** 2026-11-16 · **Approved by:** Parth
+- **Changes:** C7.3
+- **Decision:** `relock --cosmetic <address>` prints the exact `Capsule-Cosmetic: <address>` line to add to the commit message. From M4, the optional commit-msg hook adds it automatically. From M3, CI checks that only an owner used it.
+- **Why:** the tool never makes commits on the user's behalf.
+
+## D-014: New codes for M2 situations (following D-011)
+
+- **Date:** 2026-11-16 · **Status:** added under Parth's D-011 rule that each situation gets its own code. Flagged in the M2 PR for review.
+- **Changes:** C2.6, C7.4
+- **Decision:**
+  - `E026` the lockfile can't be read
+  - `W109` a prompt node's file doesn't exist
+  - `W110` stale prompt (C7.4 described this case but gave it no code)
+  - A **missing** lockfile stays `E010` ("out of date"), because the fix is the same: run `capsules lock`.

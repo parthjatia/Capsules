@@ -299,6 +299,7 @@ Errors (`E`) fail `capsules check`. Warnings (`W`) are reported only.
 | E023 | `.capsules/root.md` is missing |
 | E024 | Unknown link type word in a heading |
 | E025 | A reference can't be read (not `@node` or `@capsule#node`) |
+| E026 | `capsules.lock` can't be read (a line doesn't match the C7.2 format) |
 | W101 | Tracked file has no home capsule (orphan); see `ignore` in config |
 | W102 | Contract has no `serves` intent |
 | W103 | Contract or example has no check |
@@ -307,6 +308,8 @@ Errors (`E`) fail `capsules check`. Warnings (`W`) are reported only.
 | W106 | `code` path does not exist |
 | W107 | Weakened-test signal (C9) |
 | W108 | Change needs owner approval (solo mode) |
+| W109 | A `prompt` node's `file` does not exist |
+| W110 | Stale prompt: the prompt file changed since it was locked (C7.4) |
 
 Every message says what's wrong, where (file:line), why it matters, and the exact fix, in plain English.
 
@@ -485,7 +488,7 @@ error  One change touched both code and an existing check that judges it.
    - collapse runs of blank lines to one
 3. Take SHA-256 of the UTF-8 bytes, as lowercase hex, and **store the first 12 characters**.
 4. Display the shortest unique prefix of at least 4 characters, like Git.
-5. Front matter gets its own `capsule` hash: the normalised YAML, re-serialised with sorted keys.
+5. Front matter gets its own `capsule` hash. Convert CRLF and CR to LF, apply Unicode NFC, and parse the front matter as YAML 1.2. Serialise the parsed value with the **JSON Canonicalization Scheme ([RFC 8785](https://www.rfc-editor.org/rfc/rfc8785))**, then hash as in step 3. Comments, key order, quoting and indentation therefore never change the hash, and no library's output format can (D-012).
 
 ### C7.2 Lockfile format: `.capsules/capsules.lock`
 
@@ -507,12 +510,12 @@ The last field of a `link` record is the hash of the target **at the moment the 
 
 - `capsules lock`: updates `capsule`, `node` and `file` records. Adds `link` records for new links, pinned to the current target hash, and removes records for deleted links. **It never re-pins an existing link.**
 - `capsules refresh <address>`: re-pins the links **from** that node, after its author has updated it.
-- `capsules relock --cosmetic <address>`: re-pins every link **to** that node, declaring the change cosmetic. Owners only; adds a `Capsule-Cosmetic: <address>` trailer to the commit.
+- `capsules relock --cosmetic <address>`: re-pins every link **to** that node, declaring the change cosmetic. The tool never makes commits. It prints the exact line `Capsule-Cosmetic: <address>` to add to the commit message; from M4 the optional `commit-msg` hook adds it automatically. Owners only: CI checks, from M3, that the commit carrying the trailer was approved by an owner of that capsule (D-013).
 
 ### C7.4 Staleness
 
 - **Stale link:** the pinned hash ≠ the target's current hash (`W104`, or an error if `stale-links: block`).
-- **Stale prompt:** a `file` record's blob hash ≠ the current blob hash. Contracts about that prompt need re-checking.
+- **Stale prompt:** a `file` record's blob hash ≠ the current blob hash (`W110`). Contracts about that prompt need re-checking. A `prompt` node whose `file` doesn't exist is `W109`.
 - **Out-of-date lock:** `capsule`, `node` or `file` records ≠ current (`E010`). CI fails until someone runs `capsules lock`.
 
 ## C8. Sessions, agent identity and commit trailers

@@ -9,9 +9,9 @@
 - Tests for no network/no AI, SPEC.md sync, version and the CLI.
 - CI on Ubuntu, macOS and Windows.
 - Decisions D-001 to D-006 are logged.
-- Branch `m0-scaffold` is pushed. I couldn't open the PR because `gh` isn't logged in on this machine.
+- Merged into `main` (PR #1).
 
-### M1: Read and explain (in review, waiting for Parth's go)
+### M1: Read and explain
 
 - **Parser** (`src/core/parse.ts`): front matter, `##` node headings, links, fields read anywhere by valid key (D-007), transclusions, and file:line positions.
 - **Validation codes:**
@@ -27,6 +27,22 @@
 - **Demo app:** `examples/billing-demo` has 5 area capsules, 2 concerns, a working app and 7 passing tests.
 - **Tests:** 79 tests (unit and end-to-end, using real temporary Git repos).
 - **CI:** also validates this repo's own `.capsules/` and runs the demo app's tests.
+- Merged into `main` (PR #3), with decisions D-008 to D-011.
+
+### M2: Fingerprints and staleness (in review, waiting for Parth's go)
+
+- **Fingerprints** (`src/core/hash.ts`): the frozen C7.1 pipeline for nodes; RFC 8785 JSON Canonicalization for front matter (D-012). The exact values are pinned in tests and cross-checked with Python.
+- **Lockfile** (`src/core/lock.ts`): `.capsules/capsules.lock` in the C7.2 format, sorted, LF only, byte-identical on every run and OS.
+- **Commands**, all with `--dry-run` and `--json`:
+  - `capsules lock` pins new links and never re-pins existing ones (B12).
+  - `capsules refresh <address>` re-pins links from a reviewed node.
+  - `capsules relock --cosmetic <address>` re-pins links to a node and prints the `Capsule-Cosmetic:` line for the commit message (D-013).
+- **Staleness:**
+  - `status` shows the lock state, stale links and changed prompts.
+  - `check` reports `E010` (lock out of date), `W104` (stale link; an error with `stale-links: block`), `W109` (prompt file missing), `W110` (stale prompt) and `E026` (unreadable lockfile).
+- **Safety:** `lock` refuses to write while capsules have errors, or when the lockfile can't be read, so pins are never lost silently.
+- **Lockfiles** are committed for this repo and the demo. CI fails if either goes out of date.
+- **Tests:** 126 (unit and end-to-end), including F1 scenario 3 and the determinism checks.
 
 ## Speed measurements (M1, as asked in D-006)
 
@@ -51,7 +67,17 @@ Options for the hook (Parth chose option 1, see D-010):
 
 ## Next
 
-- **M2: Lock and freshness.** Hash pipeline (C7.1), `lock`, `refresh`, `relock --cosmetic`, and staleness in `status` and `check`.
+- **M3: Guard in CI.** Checks runner, the one rule, append-only decisions (E009), weakened-test signals, permissions via trailers, `check --base`, and the owner check for `Capsule-Cosmetic` (D-013).
+
+## How to demo M2
+
+In `examples/billing-demo`, change the wording of invoice contract C1 in `.capsules/billing/invoices.md`, then run:
+
+```sh
+node ../../dist/cli.js status
+```
+
+You should see `lock: out of date`, then 5 stale links: everything that points to `billing.invoices#C1`. Undo the edit (`git checkout .capsules/billing/invoices.md`) and status is clean again.
 
 ## How to demo M1
 
@@ -67,10 +93,13 @@ You should see the checkout page's home (`web`), parents (`root`), concerns (`pa
 - D-008: approved, with each error situation getting its own code (D-011, E016 to E025).
 - Hook speed: option 1, with targets of 150 ms on macOS/Linux and 300 ms on Windows; measure again in M4 (D-010).
 - Node 22+, and CI tests Node 22 and 24; macOS runs only for main (D-009).
+- Front matter fingerprint uses RFC 8785 (D-012); `relock --cosmetic` prints the trailer (D-013).
 
 ## Open questions for Parth
 
-1. The remaining I4 questions: whether `init` installs the commit-msg hook by default, which concerns the design partners care about most, and Cursor support beyond compiled rules.
+1. **D-014** (new codes E026, W109, W110, added under your D-011 rule): OK?
+2. **Superseded decisions show up as stale.** In the M2 demo, D3, which D7 replaced, is listed as stale along with the others. It is technically true, but it's history, not something to review. Should links from superseded decisions be left out of stale reports? I recommend yes. It would add one sentence to C7.4.
+3. The remaining I4 questions: whether `init` installs the commit-msg hook by default, which concerns the design partners care about most, and Cursor support beyond compiled rules.
 
 ## Notes
 

@@ -33,3 +33,17 @@ export function lsFiles(cwd: string): string[] {
     .split("\0")
     .filter((f) => f.length > 0);
 }
+
+/** Git blob hashes of files (relative to `cwd`), as `git hash-object` computes them. */
+export function hashObjects(paths: string[], cwd: string): Map<string, string> {
+  const out = new Map<string, string>();
+  if (paths.length === 0) return out;
+  const hashes = git(["hash-object", "--", ...paths], cwd)
+    .trim()
+    .split("\n");
+  paths.forEach((p, i) => {
+    const h = hashes[i]?.trim();
+    if (h) out.set(p, h);
+  });
+  return out;
+}

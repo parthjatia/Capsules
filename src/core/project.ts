@@ -3,12 +3,22 @@
 import { existsSync, readdirSync, readFileSync, realpathSync, statSync } from "node:fs";
 import { dirname, join, relative, resolve, sep } from "node:path";
 import { parseConfig, type Config } from "./config.js";
+import { shortestPrefixes } from "./hash.js";
+import {
+  computeCurrent,
+  LOCK_FILE,
+  lockChanges,
+  parseLock,
+  staleLinks,
+  stalePrompts,
+  type Lock,
+} from "./lock.js";
 import { computeMembership, type MembershipResult } from "./membership.js";
-import type { Capsule, CapsuleKind } from "./model.js";
+import { address, type Capsule, type CapsuleKind } from "./model.js";
 import { parseCapsuleFile } from "./parse.js";
 import { parsePermissions, type Permissions } from "./permissions.js";
-import { validateGraph } from "./resolve.js";
-import { gitToplevel, lsFiles } from "../git/git.js";
+import { targetOf, validateGraph } from "./resolve.js";
+import { gitToplevel, hashObjects, lsFiles } from "../git/git.js";
 import { errors, msg, type Diagnostic } from "../report/messages.js";
 
 export class UsageError extends Error {}
@@ -21,6 +31,10 @@ export interface Project {
   capsules: Capsule[];
   tracked: string[];
   membership: MembershipResult;
+  /** The lockfile as committed, or null if there is none (or it can't be read). */
+  lockOnDisk: Lock | null;
+  /** The lock as it would be if every link were pinned now. */
+  current: Lock;
   diagnostics: Diagnostic[];
 }
 
@@ -161,6 +175,29 @@ export function loadProject(root: string): Project {
   const membership = computeMembership(tracked, capsules, config.ignore);
   fileDiagnostics.push(...membership.diagnostics);
 
+  // Fingerprints and the lockfile (C7).
+  const promptPaths = [
+    ...new Set(
+      capsules.flatMap((c) =>
+        c.nodes
+          .filter((n) => n.type === "prompt")
+          .map((n) => n.fields.find((f) => f.key === "file")?.value ?? "")
+          .filter((p) => p && existsSync(join(root, p))),
+      ),
+    ),
+  ].sort();
+  const current = computeCurrent(capsules, hashObjects(promptPaths, root));
+  const lockText = readOptional(join(root, ...LOCK_FILE.split("/")));
+  let lockOnDisk: Lock | null = null;
+  if (lockText !== null) {
+    const parsed = parseLock(lockText);
+    diagnostics.push(...parsed.diagnostics);
+    if (parsed.diagnostics.length === 0) lockOnDisk = parsed.lock;
+  }
+  fileDiagnostics.push(
+    ...lockDiagnostics(capsules, config, lockText !== null, lockOnDisk, current),
+  );
+
   // Draft capsules report but never block (C2.1): their errors become warnings.
   const drafts = new Set(capsules.filter((c) => c.front?.status === "draft").map((c) => c.file));
   for (const d of fileDiagnostics)
@@ -174,8 +211,66 @@ export function loadProject(root: string): Project {
     capsules,
     tracked,
     membership,
+    lockOnDisk,
+    current,
     diagnostics: sortDiagnostics(diagnostics),
   };
+}
+
+const MAX_LOCK_CHANGES_SHOWN = 5;
+
+/** E010 (lock out of date), W104 (stale links) and W110 (stale prompts), from C7.4. */
+function lockDiagnostics(
+  capsules: Capsule[],
+  config: Config,
+  lockExists: boolean,
+  lockOnDisk: Lock | null,
+  current: Lock,
+): Diagnostic[] {
+  // An unreadable lockfile is already E026; don't pile E010 on top of it.
+  if (lockExists && !lockOnDisk) return [];
+  if (!lockOnDisk) return [msg.E010([], 0, true)];
+
+  const out: Diagnostic[] = [];
+  const changes = lockChanges(lockOnDisk, current);
+  if (changes.length) {
+    const shown = changes
+      .slice(0, MAX_LOCK_CHANGES_SHOWN)
+      .map((c) => `${c.kind} ${c.key} ${c.change}`);
+    out.push(msg.E010(shown, changes.length - shown.length, false));
+  }
+
+  const where = new Map<string, { file: string; line: number }>();
+  for (const c of capsules)
+    for (const n of c.nodes) where.set(address(c.id, n.id), { file: c.file, line: n.line });
+  const prefix = shortestPrefixes(
+    [...current.nodes.values()]
+      .map((n) => n.hash)
+      .concat([...lockOnDisk.links.values()].map((l) => l.hash)),
+  );
+  const short = (h: string) => prefix.get(h) ?? h.slice(0, 4);
+  for (const s of staleLinks(lockOnDisk, current)) {
+    const d = msg.W104(
+      where.get(s.from) ?? {},
+      s.from,
+      s.type,
+      s.to,
+      short(s.hash),
+      short(s.current),
+    );
+    if (config["stale-links"] === "block") d.severity = "error";
+    out.push(d);
+  }
+  for (const p of stalePrompts(lockOnDisk, current)) {
+    const node = capsules
+      .flatMap((c) => c.nodes)
+      .find((n) => address(n.capsule, n.id) === p.address);
+    const linked = (node?.links ?? [])
+      .filter((l) => l.type === "uses")
+      .map((l) => targetOf(l.ref, node!.capsule));
+    out.push(msg.W110(where.get(p.address) ?? {}, p.address, p.path, linked));
+  }
+  return out;
 }
 
 export function sortDiagnostics(ds: Diagnostic[]): Diagnostic[] {

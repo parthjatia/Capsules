@@ -3,7 +3,7 @@ import tseslint from "typescript-eslint";
 import { defineConfig } from "eslint/config";
 
 export default defineConfig(
-  { ignores: ["dist/**", "node_modules/**", "coverage/**", ".capsules/_cache/**"] },
+  { ignores: ["dist/**", "node_modules/**", "coverage/**", ".capsules/_cache/**", "examples/**"] },
   js.configs.recommended,
   tseslint.configs.recommended,
   {

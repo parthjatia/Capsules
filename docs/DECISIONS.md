@@ -52,3 +52,24 @@ Newest at the bottom. Entries are never edited, only superseded by a later entry
 - **Follow-ups Parth asked for:**
   - Before M4, verify two claims against the official Claude Code docs and cite the pages: hook input has `agent_type` inside sub-agents, and exit code 1 does not block.
   - In M1, measure hook start-up time against the 150 ms target and report the numbers before choosing a fix.
+
+## D-007: Body fields are read anywhere in a node, by valid key only
+
+- **Date:** 2026-11-16 · **Approved by:** Parth
+- **Changes:** C2.2
+- **Decision:** a line is a field only if it is on its own line and starts with a key valid for that node type (C2.3), followed by `:`. Fields may appear before or after the prose. Any other `word: text` line is prose. Lines inside fenced or indented code blocks are never fields. Blank lines under the heading are ignored.
+- **Why:** the C2 example put `checked-by:` after the prose, which contradicted "fields at the start". Markdown formatters such as Prettier insert a blank line under every heading, which must not change a capsule's meaning.
+
+## D-008: Gaps in the spec filled during M1 (PROPOSED, waiting for Parth's OK)
+
+- **Date:** 2026-11-16 · **Status:** implemented as below, but not yet approved. Nothing in CLAUDE.md was changed for these.
+- **Choices:**
+  1. **Project root = nearest folder with `.capsules/`.** Searched from the current folder up to the Git top level. C1 says `.capsules/` sits at the repo root, and in a normal repo that's the same thing. This lets `examples/billing-demo` (and monorepo packages) have their own `.capsules/`. `git ls-files` runs from that folder, so paths are relative to it.
+  2. **Error codes for cases C2.6 doesn't name:**
+     - malformed heading, or an id in the wrong format (e.g. `contract X1`) → `E001`
+     - a single-value field repeated, or a bad field value (`scope`, `timeout`, `review-by`) → `E007`
+     - unknown front matter keys, invalid capsule file names, owners not in `permissions.yaml`, and invalid `config.yaml` / `permissions.yaml` → `E008`
+     - missing `.capsules/root.md` → `E013`
+  3. **Draft capsules:** errors inside a `status: draft` capsule are reported as warnings, so they never fail `check` (C2.1 "draft capsules never block").
+  4. **Unknown keys in `config.yaml` and `permissions.yaml` are errors.** A typo like `weakend-tests: block` must not silently fall back to the default.
+- **Why:** each was needed to build M1, and none changes a rule that is already written down.

@@ -21,7 +21,7 @@ describe("billing demo (the M1 demo)", () => {
         "rules:     web#C1, root#C1, payments#C1, payments#C2, pii#C1",
         "checks:    web#checkout-e2e, root#all-tests, payments#no-double-charge, pii#no-pii-logs",
         "may edit:  default, capsules-drafter (context only)",
-        "blocked:   billing-agent (outside its scope), frontend-agent (concern: payments)",
+        "blocked:   billing-agent (outside its scope), frontend-agent (concern: payments), test-maintainer (role can't edit code)",
         "decisions: web#D2 (rejected: client-side tax calculation)",
         "",
       ].join("\n"),

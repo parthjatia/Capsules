@@ -1,6 +1,6 @@
 # Capsules
 
-> Status: early development (milestone M3). Not published yet.
+> Status: early development (milestone M4a). Not published yet.
 
 Capsules is a free, open-source command-line tool that keeps a Git-stored, nested record of what each part of an AI-built app is meant to do. It shows that record to people and to agents, and it blocks AI agents from quietly breaking it.
 
@@ -33,6 +33,20 @@ Every rule, check and decision has a fingerprint, recorded in `.capsules/capsule
 It also warns when a test looks weakened (`W107`), and then runs the checks of the capsules your change affects. Trailers can be forged, so for real protection also require owner approval on GitHub (CODEOWNERS and branch protection). In CI, check out full history (`fetch-depth: 0`).
 
 Try it: `node scripts/demo-m3.mjs` (after `npm run build`).
+
+## Agents: rules and hooks
+
+`capsules compile` turns your capsules into rule files your agent reads: `.claude/rules/` for Claude Code, scoped to the files each capsule covers, plus `.cursor/rules/` and an `AGENTS.md` block if you enable them. Commit them, and never edit them by hand.
+
+Claude Code hooks then check every edit as it happens:
+
+- `capsules hook pre-edit` blocks an edit that `permissions.yaml` doesn't allow, an edit to an existing decision, or a test change in a session that already changed the code the test judges.
+- `capsules hook pre-bash` blocks obvious shell writes to protected files.
+- `capsules hook stop` tells you at the end of a turn if the lockfile or rule files need updating.
+
+A blocked edit comes back to the agent with the reason and the fix. Hooks can be bypassed on your machine, so CI (`capsules check`) stays the real gate. `capsules work <capsules> --agent <name>` limits a session to some capsules and labels its commits.
+
+Try it: `node scripts/demo-m4a.mjs` (after `npm run build`).
 
 ## Develop
 

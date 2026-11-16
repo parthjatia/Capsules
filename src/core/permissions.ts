@@ -1,24 +1,12 @@
 // .capsules/permissions.yaml (C5): roles, agents, scopes and owners, and the per-edit
 // check (C5.2 step 3) that CI (M3) and the hooks (M4) share.
-import picomatch from "picomatch";
 import { z } from "zod";
 import { readYaml, zodProblems } from "./config.js";
 import { msg, type Diagnostic } from "../report/messages.js";
 
-export const ACTIONS = [
-  "read",
-  "edit-code",
-  "add-checks",
-  "change-checks",
-  "edit-context",
-  "add-decisions",
-  "propose-intent",
-  "propose-contracts",
-  "propose-examples",
-  "edit-permissions",
-  "edit-config",
-] as const;
-export type Action = (typeof ACTIONS)[number];
+import { ACTIONS, capsuleMatches } from "./access.js";
+
+export { ACTIONS, agentMay, capsuleMatches, type Action, type Verdict } from "./access.js";
 
 const PermissionsSchema = z.strictObject({
   format: z.union([z.number(), z.string()]).optional(),
@@ -97,11 +85,6 @@ export function parsePermissions(
   return p;
 }
 
-/** Capsule patterns use `.` between levels (`billing.**`); match them like paths. */
-export function capsuleMatches(capsuleId: string, pattern: string): boolean {
-  return picomatch.isMatch(capsuleId.replace(/\./g, "/"), pattern.replace(/\./g, "/"));
-}
-
 export interface EditAnswer {
   agent: string;
   /** "code": may edit this file. "context": may only edit the capsule's context. */
@@ -142,31 +125,3 @@ export function whoMayEditCode(
 }
 
 export type AgentSpec = Permissions["agents"][string];
-
-export type Verdict =
-  { allowed: true; needsApproval: boolean } | { allowed: false; reason: string };
-
-/**
- * C5.2 step 3 for an agent (or `default`): the role allows the action, the capsule is in
- * scope, and none of the file's concerns blocks the agent. `propose-*` actions are allowed
- * but need owner approval (step 4).
- */
-export function agentMay(
-  name: string,
-  action: Action,
-  capsuleId: string,
-  concerns: string[],
-  perms: Permissions,
-): Verdict {
-  const spec: AgentSpec | undefined = perms.agents[name];
-  if (!spec)
-    return { allowed: false, reason: `${name} is not listed under agents in permissions.yaml` };
-  const may = perms.roles[spec.role]?.may ?? [];
-  if (!may.includes(action))
-    return { allowed: false, reason: `the ${spec.role} role of ${name} doesn't include ${action}` };
-  if (!spec.capsules.some((p) => capsuleMatches(capsuleId, p)))
-    return { allowed: false, reason: `${capsuleId} is outside the scope of ${name}` };
-  const blocker = concerns.find((c) => spec["blocked-by"].includes(c));
-  if (blocker) return { allowed: false, reason: `${name} is blocked by the ${blocker} concern` };
-  return { allowed: true, needsApproval: action.startsWith("propose-") };
-}

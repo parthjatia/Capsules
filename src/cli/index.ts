@@ -2,7 +2,10 @@ import { Command, CommanderError } from "commander";
 import { UsageError } from "../core/project.js";
 import { GitError } from "../git/git.js";
 import { VERSION } from "../version.js";
+import { runHook } from "../hooks/main.js";
 import { check, type CheckOptions } from "./commands/check.js";
+import { compile } from "./commands/compile.js";
+import { work } from "./commands/work.js";
 import { explain } from "./commands/explain.js";
 import { lock, refresh, relock } from "./commands/lock.js";
 import { status } from "./commands/status.js";
@@ -77,6 +80,37 @@ export function buildProgram(io: Io, setExit: (code: number) => void): Command {
       setExit(relock(io, addr, opts)),
     );
 
+  program
+    .command("compile")
+    .description("write the agent rule files (Claude Code, Cursor, AGENTS.md) from .capsules/")
+    .option("--check", "write nothing; exit 1 if any generated file is out of date (E011)")
+    .option("--dry-run", "show what would change without writing")
+    .option("--json", "print JSON instead of text")
+    .action((opts: { check?: boolean; dryRun?: boolean; json?: boolean }) =>
+      setExit(compile(io, opts)),
+    );
+
+  program
+    .command("work")
+    .description("start a scoped work session for an agent, or end it with --end")
+    .argument("[pattern]", "capsules to work on, e.g. billing.invoices or 'billing.**'")
+    .option("--agent <name>", "the agent from permissions.yaml doing the work (default: default)")
+    .option("--end", "end the current session")
+    .option("--json", "print JSON instead of text")
+    .action(
+      (pattern: string | undefined, opts: { agent?: string; end?: boolean; json?: boolean }) =>
+        setExit(work(io, pattern, opts)),
+    );
+
+  program
+    .command("hook")
+    .description("called by agent and Git hooks only: pre-edit, pre-bash, stop, commit-msg <file>")
+    .argument("<event>", "pre-edit | pre-bash | stop | commit-msg")
+    .argument("[file]", "the commit message file (commit-msg only)")
+    .action(async (event: string, file: string | undefined) =>
+      setExit(await runHook(file ? [event, file] : [event])),
+    );
+
   return program;
 }
 
@@ -107,5 +141,3 @@ export async function main(argv: string[], io: Io = processIo()): Promise<number
     return EXIT.internal;
   }
 }
-
-process.exitCode = await main(process.argv);

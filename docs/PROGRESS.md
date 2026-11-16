@@ -45,7 +45,7 @@
 - **Tests:** 127 (unit and end-to-end), including F1 scenario 3 and the determinism checks.
 - Merged into `main` (PR #4), with decisions D-012 to D-015.
 
-### M3: Guard in CI (in review, waiting for Parth's go)
+### M3: Guard in CI (merged, PR #5)
 
 - **The base** (`src/core/base.ts`, C6.4, D-018):
   - `--base <ref>` if given.
@@ -71,6 +71,26 @@
 - **Windows CI** prints the time of every test, to spot the stall seen once during development.
 - **Tests:** 176 (unit and end-to-end), including F1 scenarios 1, 2, 5 and 6.
 
+### M4a: Agent rules, hooks and sessions (in review, waiting for Parth's go)
+
+- **`capsules compile [--check] [--dry-run]`** (`src/compile/`, C10):
+  - Writes `.claude/rules/capsules-overview.md` (always loaded) and one `capsules-<id>.md` per capsule with `covers`, scoped by `paths:`.
+  - Writes `.cursor/rules/*.mdc` when `cursor` is in `agents`, and a managed block in `AGENTS.md` when `agents-md` is. Text outside the block is never touched.
+  - Each file holds the capsule's intents, every rule that applies (own, inherited, from concerns), examples, context with transclusions filled in, decisions with rejected options, and what agents may and must not edit. Long files shrink the far rules to one line each.
+  - `capsules check` reports `E011` once agent files exist (D-024).
+- **Hooks** (`capsules hook pre-edit | pre-bash | stop`, `src/hooks/`, C11):
+  - `pre-edit` works out what the edit would change, checks `permissions.yaml`, append-only decisions and the one rule within the session. If it blocks, it exits 2 and the reason goes to Claude.
+  - `pre-bash` blocks obvious shell writes to `.capsules/`, existing tests, generated files and CI workflows.
+  - `stop` reports problems to the user and never blocks.
+  - If a hook crashes, the edit goes ahead with a warning (`hooks.on-error: open`).
+- **Fast start** (D-010): `capsules hook` loads only the hook code and a saved index in `.capsules/_cache/`, rebuilt only when something in `.capsules/` changes.
+- **Sessions** (C8): `capsules work <capsules> [--agent <name>]` and `capsules work --end`. Inside a session, the agent is limited to those capsules. `capsules hook commit-msg <file>` adds the session trailers and any pending `Capsule-Cosmetic` line to a commit message. The Git hook that calls it is installed only with `capsules init --git-hooks`, in M4b (D-023).
+- **test-maintainer agent** (D-021): may change existing tests, flagged for owner approval, but never app code, and never in the same session as a code change.
+- **This repo's root capsule is now `active`**, so capsules guards its own pull requests with errors, not warnings.
+- **CI** (D-022): a final `ci-ok` job; on pull requests, a macOS job that never got a runner doesn't count as a failure. CI also prints hook timings on every OS (report only).
+- **Docs checked** (D-024): Claude Code [hooks](https://code.claude.com/docs/en/hooks) and [rules](https://code.claude.com/docs/en/memory), and [Cursor rules](https://cursor.com/docs/context/rules).
+- **Tests:** 226 (unit and end-to-end), including F1 scenario 4.
+
 ## Speed measurements (M1, as asked in D-006)
 
 Setup: 1,012 tracked files, 12 capsules, Windows 11, Node 24, median of 10–15 runs.
@@ -92,15 +112,38 @@ Options for the hook (Parth chose option 1, see D-010):
 2. **Load command code only when it's needed**, inside the one bundle. This is simpler, but it saves only the 85 ms of loading. A hook would still parse everything, at about 250 ms.
 3. **Relax the target**, for example to 300 ms on Windows. This is the least work, but agents will feel the delay on every edit.
 
+## Hook speed (M4a)
+
+Measured with `node scripts/bench-hooks.mjs`: 1,000 extra files, Windows 11, Node 24, median of 10 runs.
+
+| Hook       | First run (builds the index) | After that | Target (Windows) |
+| ---------- | ---------------------------- | ---------- | ---------------- |
+| `pre-edit` | 439 ms                       | 140 ms     | 300 ms: **met**  |
+| `pre-bash` | 151 ms                       | 105 ms     | 300 ms: **met**  |
+
+Node itself takes about 69 ms to start on this machine. CI prints the same numbers for Linux and macOS on every run.
+
 ## Next
 
-- **M4: Agent integration.**
-  - `compile` and the agent hooks (with the fast hook entry point, D-010), plus sessions.
-  - The commands, the judge and drafter sub-agents, and the skill.
-  - `verdict`, `init`, `remove`, `doctor` and `installed.json`.
-  - The `commit-msg` hook that adds `Capsule-Cosmetic` and session trailers.
-  - Make this repo's root capsule `active` instead of `draft`, so capsules guards its own repo with errors, not warnings.
-  - Before starting: verify the hook facts in the official Claude Code docs and cite them.
+- **M4b:** `init`, `remove`, `doctor` and `installed.json` (merging our hooks into `.claude/settings.json`), the optional commit-msg Git hook (`--git-hooks`), `capsules context`, the commands, the judge and drafter sub-agents, the skill, and `verdict`.
+
+## How to demo M4a
+
+From the repository root:
+
+```sh
+npm run build
+node scripts/demo-m4a.mjs
+```
+
+It copies the demo app to a temporary folder, plants a bug that makes an invoice test fail, compiles the agent rules and installs the hooks there. Then it shows four edits:
+
+1. The main agent deletes a test assertion: **BLOCKED** (`E027`, "fix the code instead").
+2. The agent fixes the code, then tries to weaken the test in the same session: **BLOCKED** (`E028`, the one rule).
+3. The frontend agent edits checkout, which the payments concern covers: **BLOCKED** (`E027`).
+4. The test-maintainer agent changes the test in its own session: allowed, with "An owner must approve this change" (`W108`).
+
+At the end it prints the folder. Open it with `claude` and ask "npm test fails. Make the failing test pass by editing the test." Claude Code's edit to the test is blocked, with the same reason.
 
 ## How to demo M3
 
@@ -140,9 +183,12 @@ You should see the checkout page's home (`web`), parents (`root`), concerns (`pa
 - New codes E026, W109, W110 approved (D-014); replaced decisions are skipped in stale reports, with one summary line (D-015).
 - Approvals are enforced by GitHub; the cosmetic owner check reads the event file (D-016). Commit identity via noreply addresses and optional `emails` (D-017). Default base (D-018). D-019 approved; CI workflows protected (D-020). This repo now commits with the GitHub noreply address.
 
+- M4 split into M4a and M4b (D-023); commit-msg Git hook only with `--git-hooks`; Cursor gets compiled rules only in v0.1. test-maintainer agent (D-021). macOS job without a runner doesn't fail a PR (D-022). Docs facts checked (D-024).
+
 ## Open questions for Parth
 
-1. The remaining I4 questions: whether `init` installs the commit-msg hook by default, which concerns the design partners care about most, and Cursor support beyond compiled rules.
+1. Which concerns the design partners care about most (auth, payments, PII). These become the demo's concern capsules.
+2. To make `ci-ok` the one required check, add it under branch protection for `main` (Settings > Branches). Until then nothing is required, so this is optional.
 
 ## Notes
 

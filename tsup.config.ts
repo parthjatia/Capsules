@@ -1,7 +1,9 @@
 import { defineConfig } from "tsup";
 
 export default defineConfig({
-  entry: { cli: "src/cli/index.ts" },
+  entry: { cli: "src/cli/launcher.ts" },
+  // `capsules hook` loads only the hook chunks (D-010).
+  splitting: true,
   format: ["esm"],
   target: "node22",
   platform: "node",

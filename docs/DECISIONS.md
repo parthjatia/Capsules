@@ -197,3 +197,47 @@ Newest at the bottom. Entries are never edited, only superseded by a later entry
 - **Decision:** a change to `.github/workflows/**` or `.capsules/config.yaml` is `edit-config`, which only owners may do (no role grants it by default). An agent's commit, or a commit by someone who isn't an owner, is `E027`. Other ignored files (for example `docs/**`) stay outside the guard.
 - **Why:** an agent that can edit the CI workflow can switch the guard off, for example by deleting the `capsules check` step.
 - **On this repo:** workflow changes go in their own commit, for an owner to approve in the PR review.
+
+## D-021: A test-maintainer agent may propose changes to existing checks
+
+- **Date:** 2026-11-16 · **Approved by:** Parth
+- **Changes:** C5 example, C5.1
+- **Decision:** a new action, `propose-checks`, lets an agent modify or delete existing checks, flagged for owner approval in CI (`W108`, a warning in every mode). A new role, `maintainer` (`add-checks`, `propose-checks`), and agent, `test-maintainer`, use it. The role has no `edit-code`, so the agent can't touch app code (`E027`). It must work in its own session: the one rule (V1) blocks a test change in the same commit, `Capsule-Session` or Claude Code session as a code change. `change-checks` stays humans-only unless explicitly granted. An agent whose role has `propose-checks` but not `change-checks` uses it automatically.
+- **Why:** with the hooks in place no agent could ever fix a test. This gives a narrow, reviewed way to do it.
+
+## D-022: A macOS job that never got a runner doesn't fail a pull request
+
+- **Date:** 2026-11-16 · **Approved by:** Parth
+- **Changes:** `.github/workflows/ci.yml` (no spec change)
+- **Decision:** a final `ci-ok` job sums up the run. On pull requests, a macOS job that was cancelled before running any step (no runner was free) is reported as skipped, not failed. Every other failure, timeout or cancellation fails `ci-ok`. macOS still runs, and must pass, on pushes to main.
+- **Why:** GitHub's macOS runners are sometimes unavailable for 15 minutes, which showed a red check on PR #5 although no test had run.
+
+## D-023: M4 is split into M4a and M4b
+
+- **Date:** 2026-11-16 · **Approved by:** Parth
+- **M4a:** `compile` (Claude Code, Cursor, AGENTS.md), the hooks (`pre-edit`, `pre-bash`, `stop`) with the fast entry point and saved index (D-010), sessions (`capsules work`), the `commit-msg` trailer command, `E011` in `check`, the `test-maintainer` agent (D-021), and this repo's root capsule made `active`.
+- **M4b:** `init`, `remove`, `doctor`, `installed.json` and the settings merge, the optional `commit-msg` Git hook (`--git-hooks`), `capsules context`, the commands, the judge and drafter sub-agents, the skill, and `verdict`.
+- **Also decided:** `init` installs the `commit-msg` Git hook only with `--git-hooks` (I4). Cursor gets compiled rule files only in v0.1; Cursor hooks come later (I4).
+
+## D-024: Facts checked against the Claude Code and Cursor docs, and what they changed
+
+- **Date:** 2026-11-16 · **Status:** facts verified on 2026-11-16; spec wording updated to match. Flagged in the M4a PR for review.
+- **Sources:**
+  - [Claude Code hooks](https://code.claude.com/docs/en/hooks): common input fields; PreToolUse input; exit code output; Stop input and decision control; JSON output (`systemMessage`).
+  - [Claude Code memory, `.claude/rules/`](https://code.claude.com/docs/en/memory): path-specific rules.
+  - [Cursor rules](https://cursor.com/docs/context/rules).
+- **Confirmed:**
+  1. Exit code 2 blocks and Claude sees stderr as the reason; exit 1 does not block.
+  2. `agent_type` is present inside a sub-agent, and also when the session was started with `--agent`.
+  3. `tool_input.file_path` is always absolute (backslashes on Windows).
+  4. Rule files in `.claude/rules/` are found recursively. A `paths` list scopes a rule; rules without it load at launch.
+  5. Cursor project rules must be `.mdc`, and `globs` is one comma-separated string.
+- **What changed in the spec:**
+  1. The generated-file marker goes right after the front matter, because both tools read front matter only at the very top.
+  2. The Stop hook reports through a JSON `systemMessage`.
+  3. `check` reports `E011` only once agent files are installed.
+  4. The hooks apply the one rule per Claude Code session or `capsules work` session.
+- **Interpretations:**
+  1. In a hook, an existing check is a check file that exists on disk and wasn't created earlier in the same session.
+  2. Writes through Bash to protected paths (`.capsules/`, existing check files, generated files, CI workflows) are blocked for every agent, with a pointer to the Edit and Write tools, which capsules can check precisely.
+  3. A hook records an allowed edit when it allows it. If the tool call is then rejected, the session remembers a change that didn't happen, which can only make the hook stricter.

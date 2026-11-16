@@ -1,5 +1,4 @@
 // Change units (C6.1) and classifying each changed file (C5.2 step 1).
-import picomatch from "picomatch";
 import {
   changesSince,
   commitChanges,
@@ -19,7 +18,8 @@ import { isIgnored, membershipOf } from "./membership.js";
 import type { Capsule, CapsuleNode, NodeType } from "./model.js";
 import { parseCapsuleFile } from "./parse.js";
 import type { Action } from "./permissions.js";
-import { capsuleFromPath, type Project } from "./project.js";
+import { capsuleFromPath, checkFileMatcher as matcherFor } from "./judges.js";
+import type { Project } from "./project.js";
 
 export interface UnitFile {
   path: string;
@@ -184,19 +184,10 @@ export interface Classified {
 
 /** Every glob that marks a check file: `checks.files` plus each check node's `files`. */
 export function checkFileMatcher(project: Project): (path: string) => boolean {
-  const globs = [
-    ...project.config.checks.files,
-    ...project.capsules.flatMap((c) =>
-      c.nodes.filter((n) => n.type === "check").flatMap((n) => checkGlobs(n)),
-    ),
-  ];
-  const tests = globs.map((g) => picomatch(g, { dot: true }));
-  return (p) => tests.some((t) => t(p));
+  return matcherFor(project.config.checks.files, project.capsules);
 }
 
-export function checkGlobs(n: CapsuleNode): string[] {
-  return n.fields.filter((f) => f.key === "files").map((f) => f.value);
-}
+export { checkGlobs } from "./judges.js";
 
 /** True if every line of `before` appears in `after`, in order: only lines were added. */
 export function isAdditive(before: string, after: string): boolean {

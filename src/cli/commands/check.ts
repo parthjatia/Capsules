@@ -1,6 +1,7 @@
 import { affectedCapsules, runChecks, type CheckResult } from "../../checks/runner.js";
 import { resolveBase } from "../../core/base.js";
 import { changeUnits } from "../../core/changes.js";
+import { compileDiagnostics } from "../../compile/compile.js";
 import { guard } from "../../core/guard.js";
 import { actorLabel } from "../../core/identity.js";
 import { skippedLine, splitReplaced, staleLinks } from "../../core/lock.js";
@@ -18,7 +19,7 @@ export interface CheckOptions {
   json?: boolean;
 }
 
-// C15 order: validate, lock, (compiled files: M4), permissions and the one rule on the diff,
+// C15 order: validate, lock, compiled files, permissions and the one rule on the diff,
 // append-only decisions, weakened-test signals, then run the checks of affected capsules.
 export async function check(io: Io, opts: CheckOptions): Promise<number> {
   const project = loadProject(findProjectRoot(io.cwd));
@@ -37,6 +38,7 @@ export async function check(io: Io, opts: CheckOptions): Promise<number> {
 
   const diagnostics = sortDiagnostics([
     ...project.diagnostics,
+    ...compileDiagnostics(project),
     ...g.diagnostics,
     ...runDiagnostics,
   ]);

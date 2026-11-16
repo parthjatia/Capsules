@@ -113,7 +113,7 @@ Change these only with Parth's agreement, and log every change in `docs/DECISION
 | B4 | **All capsule files live in one folder, `.capsules/`, at the repo root.** This changes V2, which had one `CAPSULE.md` per source folder | Nothing can be picked up by bundlers, docs generators or static-site builds |
 | B5 | **Never touch app code, `package.json`, lockfiles or build config.** Every file we create or change is recorded in `.capsules/installed.json` and can be removed | "Must not affect normal functionality" |
 | B6 | **Area capsules nest by their folders inside `.capsules/`. Concern capsules live in `.capsules/_concerns/`.** Membership comes from `covers:` patterns | Nesting stays simple; concerns cut across freely |
-| B7 | **Addresses are `capsule#node`**, for example `billing.invoices#C1` or `pii#P1` | Unambiguous; dots belong to capsule ids |
+| B7 | **Addresses are `capsule#node`**, for example `billing.invoices#C1` or `pii#C1`. The prefix `<repo>:` (for example `payments-service:billing#C3`) is reserved for future cross-repo links and rejected in v0.1 (`E015`) | Unambiguous; dots belong to capsule ids; reserving `:` now means cross-repo links later won't break existing files |
 | B8 | **Permissions live in `.capsules/permissions.yaml`** (this replaces V2's `capsule.policy`) | One clear place for roles, agents, scopes and owners |
 | B9 | **The one rule is defined exactly as in C6**, per commit and per agent session | Enforceable without AI |
 | B10 | **Solo mode** (`solo: true`) turns "needs another person's approval" into a warning, but never relaxes the one rule | Most first users are solo or tiny teams |
@@ -229,6 +229,7 @@ src/billing/invoices/create.ts#createInvoice
 ```
 
 - `<ref>` is `@<node-id>` (same capsule) or `@<capsule-id>#<node-id>` (another capsule).
+- **Reserved repo prefix.** `@<repo>:<capsule-id>#<node-id>` (for example `@payments-service:billing#C3`) is reserved for future cross-repo links. `<repo>` uses the same characters as an id segment. v0.1 parses it and rejects it with `E015`. The `:` character is therefore never allowed inside a capsule or node id. This applies everywhere an address appears: heading links, `checked-by:`, `tripwire:`, `{{ @ref }}` transclusions, and CLI arguments such as `capsules why <address>` (which exit `64` with the same message).
 - Body **fields** are `key: value` lines at the start of the body. The first line that isn't a known field starts free text. Fields may repeat where noted.
 - `checked-by:` may appear as a field or as a heading link. Both mean the same thing.
 
@@ -237,7 +238,7 @@ src/billing/invoices/create.ts#createInvoice
 | Type | Id format | Allowed links | Fields | Notes |
 | --- | --- | --- | --- | --- |
 | `intent` | `I<n>` | none | none | Plain words, one idea |
-| `contract` | `C<n>` | `serves` (intent), `checked-by` (check) | `scope: tree\|own` (default `tree`) | `tree`: applies to this capsule's files and all its descendants' files |
+| `contract` | `C<n>` (in area and concern capsules alike) | `serves` (intent), `checked-by` (check) | `scope: tree\|own` (default `tree`) | `tree`: applies to this capsule's files and all its descendants' files |
 | `example` | `E<n>` | `shows` (contract, required), `checked-by` | none | What humans approve |
 | `check` | slug | none | `run` (required), `files` (globs, repeatable), `timeout` (seconds), `cwd` | `files` = where the test lives, used for protection |
 | `decision` | `D<n>` | `serves`, `supersedes` (decision), `assumes` (assumption) | `rejected` (repeatable) | Append-only (C6.3) |
@@ -285,6 +286,7 @@ Errors (`E`) fail `capsules check`. Warnings (`W`) are reported only.
 | E012 | Concern id collides with a top-level area id |
 | E013 | Folder without its capsule file |
 | E014 | Concern covers no files |
+| E015 | Cross-repo address (`<repo>:capsule#node`) is reserved and not supported yet in v0.1. Fix: point to a capsule in this repo, or remove the link until cross-repo links ship |
 | W101 | Tracked file has no home capsule (orphan); see `ignore` in config |
 | W102 | Contract has no `serves` intent |
 | W103 | Contract or example has no check |
@@ -313,7 +315,7 @@ file:      src/web/checkout.tsx
 home:      web                       (covers: src/web/**)
 parents:   root
 concerns:  payments, pii
-rules:     web#C1, root#C1, payments#Y1, payments#Y2, pii#P1
+rules:     web#C1, root#C1, payments#C1, payments#C2, pii#C1
 checks:    web#checkout-e2e, payments#no-double-charge, pii#no-pii-logs
 may edit:  default, capsules-drafter (context only)
 blocked:   frontend-agent (concern: payments), billing-agent (outside its scope)
@@ -330,7 +332,9 @@ ignore:                            # files that need no capsule
   - ".claude/**"
   - ".cursor/**"
   - ".github/**"
-  - "*.md"
+  - "README.md"                    # not "*.md": prompts like prompts/*.md need a home (DECISIONS D-003)
+  - "CHANGELOG.md"
+  - "docs/**"
   - "**/package-lock.json"
   - "**/pnpm-lock.yaml"
   - "**/yarn.lock"
@@ -393,6 +397,7 @@ agents:                            # names match Claude Code sub-agent names whe
 | `propose-intent`, `propose-contracts`, `propose-examples` | Change those nodes. CI then requires owner approval (warning in solo mode) |
 | `edit-permissions`, `edit-config` | Humans only |
 | (none) | Generated agent files: only `capsules compile` writes them |
+| (none) | Tool-written files `capsules.lock` and `installed.json`: only the tool's own commands write them (`lock`, `refresh`, `relock`, `init`, `remove`). Hooks block direct edits. `refresh` of links **from** an intent, contract or example needs the same approval as editing that node (`propose-*`); `relock --cosmetic` is owners only |
 
 Owners may do everything in capsules they own. Humans who aren't owners act as `default`.
 
@@ -405,6 +410,7 @@ Input: file `F`, actor `A` (agent name or human), and its role `R`, `capsules` p
    - `F` is new and a check file → `add-checks`.
    - `F` is under `.capsules/` → parse before and after, diff the nodes, and map each changed node to its action. Front matter changes need `propose-contracts`.
    - `F` is a generated file → only `capsules compile` may write it.
+   - `F` is `.capsules/capsules.lock` or `.capsules/installed.json` → no direct edits; only the tool's commands write them (C5.1).
    - Otherwise → `edit-code`.
 2. **Find the capsules:** the home of `F` (C2.7), or the capsule whose file is being edited.
 3. **Allow only if** `R` allows the action, **and** the home capsule matches a pattern in `S`, **and** none of `F`'s concerns is in `B`.
@@ -415,6 +421,8 @@ Input: file `F`, actor `A` (agent name or human), and its role `R`, `capsules` p
 ### C6.1 Change unit
 
 A **change unit** is one commit. In CI, it is also all commits in the pull request that share the same `Capsule-Session` trailer. Commits without trailers are treated as human commits, checked per commit.
+
+**Whole-PR unit (no trailers).** In CI, all commits in the pull request that have **no** `Capsule-Session` trailer are also checked together as one extra change unit. This stops an agent from dodging V1 or V2 by leaving out trailers and splitting the code change and the test change into separate commits. A violation found only in this whole-PR unit is an error, or a warning in solo mode (a human may legitimately fix code and a test in one PR). Violations inside a single commit stay errors in every mode.
 
 ### C6.2 Violations
 
@@ -473,7 +481,7 @@ Line-based, sorted, LF line endings, trailing newline. Records are sorted by kin
 # capsules.lock v1. Generated by `capsules lock`. Do not edit by hand.
 capsule billing.invoices 5b2e90c1d7aa
 node billing.invoices#C1 contract a91f2c81d0b4
-node pii#P1 contract 3c07aa12e9f1
+node pii#C1 contract 3c07aa12e9f1
 link billing.invoices#D7 serves billing.invoices#C1 a91f2c81d0b4
 link billing.invoices#idempotency uses billing.invoices#C1 a91f2c81d0b4
 file billing.invoices#invoice-agent prompts/invoice-agent.md 8d3f0e1a9b27c4d6e5f8a0b1c2d3e4f5a6b7c8d9
@@ -701,8 +709,8 @@ permissions.yaml┘                          │
 capsules/
 ├── CLAUDE.md                 # this file
 ├── README.md                 # for users: what, why, 5-minute start
-├── LICENSE                   # Apache-2.0 (to confirm with Parth)
-├── package.json              # name: @<npm-handle>/capsules, bin: capsules
+├── LICENSE                   # Apache-2.0
+├── package.json              # name: @pyscoparth/capsules, bin: capsules
 ├── tsconfig.json
 ├── src/
 │   ├── cli/                  # commander setup; one file per command
@@ -804,10 +812,10 @@ Each milestone must be a finished, demoable product. **Don't start the next mile
 ## F3. Versioning and shipping
 
 - SemVer for the CLI. The file format is versioned separately (`format: 0.1`).
-- **npm:** publish from GitHub Actions on a `v*` tag, using npm trusted publishing (check current npm docs). Users run `npx @<npm-handle>/capsules init`.
-- **GitHub Action:** `uses: <github-handle>/capsules/action@v0.1`, which runs `capsules check --ci` and posts the C17 summary.
+- **npm:** publish from GitHub Actions on a `v*` tag, using npm trusted publishing (check current npm docs). Users run `npx @pyscoparth/capsules init`.
+- **GitHub Action:** `uses: parthjatia/capsules/action@v0.1`, which runs `capsules check --ci` and posts the C17 summary.
 - **Claude Code plugin:** package the commands, sub-agents, skill and hooks as a plugin installable from the GitHub repo (check the current plugin and marketplace format first).
-- **Never publish, tag, push or open public issues without Parth's explicit OK.**
+- **Never publish to npm, create tags or releases, make the repo public, or open public issues without Parth's explicit OK.** Committing, pushing to non-`main` branches and opening pull requests on `parthjatia/Capsules` is allowed (Parth, 2026-11-16).
 
 ---
 
@@ -849,6 +857,7 @@ Each milestone must be a finished, demoable product. **Don't start the next mile
 - **Read limits are soft on a local machine.** An agent with a shell can open any file. Secrets and hidden checks must not live in the repo.
 - **`pre-bash` is best effort.** Clever shell commands can bypass it. CI is the gate.
 - **Trailers can be forged.** Protected layers also need owner approval on GitHub.
+- **Splitting work across commits without trailers.** The whole-PR unit (C6.1) catches an untrailed agent that splits code and test changes inside one PR. It can't catch the split across **two separate PRs**, and in solo mode the whole-PR finding is only a warning. CODEOWNERS approval on check files is the backstop.
 - **The judge is usually the same model family as the builder,** in a fresh read-only context. That's better than self-review, but not independent. Tests block; verdicts advise.
 - **Weakened-test signals are heuristics.** They warn by default.
 - **Fingerprints see wording, not meaning.** Use `relock --cosmetic` for typo fixes. Code that depends on a rule without a reference isn't tracked; the judge and the checks cover it.
@@ -885,8 +894,8 @@ Each milestone must be a finished, demoable product. **Don't start the next mile
 
 ## I4. Open questions for Parth (decide before M6)
 
-- [ ] npm package name and GitHub handle to publish under
-- [ ] License: Apache-2.0 (recommended for its patent grant) or MIT
+- [x] npm package name and GitHub handle: `@pyscoparth/capsules`, repo `parthjatia/Capsules` (private)
+- [x] License: Apache-2.0
 - [ ] Should `init` install the commit-msg Git hook by default, or only with `--git-hooks`?
 - [ ] Which concerns do the design partners care about most (auth, payments, PII)? These become the demo's concern capsules
 - [ ] Do we support Cursor in v0.1 beyond compiled rules?

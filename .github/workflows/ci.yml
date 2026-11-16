@@ -1,0 +1,42 @@
+name: ci
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+
+permissions:
+  contents: read
+
+jobs:
+  test:
+    name: ${{ matrix.os }} / node ${{ matrix.node }}
+    runs-on: ${{ matrix.os }}
+    strategy:
+      fail-fast: false
+      # Private repo: macOS minutes cost 10x and Windows 2x, so only the oldest
+      # supported Node runs on every OS; newer Nodes run on Linux only.
+      matrix:
+        os: [ubuntu-latest, macos-latest, windows-latest]
+        node: [20]
+        include:
+          - { os: ubuntu-latest, node: 22 }
+          - { os: ubuntu-latest, node: 24 }
+    steps:
+      - uses: actions/checkout@v5
+      - uses: actions/setup-node@v5
+        with:
+          node-version: ${{ matrix.node }}
+          cache: npm
+      - run: npm ci
+      - run: npm run lint
+      - run: npm run format:check
+      - run: npm run typecheck
+      - run: npm run spec:check
+      - run: npm test
+      - name: npx . --version
+        shell: bash
+        run: |
+          out="$(npx --yes . --version)"
+          echo "capsules --version -> $out"
+          test "$out" = "$(node -p "require('./package.json').version")"

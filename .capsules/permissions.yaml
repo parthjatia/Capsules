@@ -11,7 +11,10 @@ roles:
       [edit-context, add-decisions, add-checks, propose-intent, propose-contracts, propose-examples]
   judge:
     may: [read]
+  maintainer:                      # changes existing tests, never app code (D-021)
+    may: [add-checks, propose-checks]
 agents:
   default: { role: builder, capsules: ["**"] }
   capsules-judge: { role: judge, capsules: ["**"] }
   capsules-drafter: { role: drafter, capsules: ["**"] }
+  test-maintainer: { role: maintainer, capsules: ["**"] }   # run it in its own session

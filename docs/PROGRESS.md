@@ -188,7 +188,7 @@ You should see the checkout page's home (`web`), parents (`root`), concerns (`pa
 ## Open questions for Parth
 
 1. Which concerns the design partners care about most (auth, payments, PII). These become the demo's concern capsules.
-2. To make `ci-ok` the one required check, add it under branch protection for `main` (Settings > Branches). Until then nothing is required, so this is optional.
+2. When this repo becomes public, make `ci-ok` a required check for `main` (D-025).
 
 ## Notes
 

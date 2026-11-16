@@ -566,6 +566,7 @@ The last field of a `link` record is the hash of the target **at the moment the 
   Capsule-Scope: billing.**
   ```
 - CI reads the trailers. **They can be forged**, so changes to protected layers also need owner approval on GitHub (CODEOWNERS plus branch protection). `capsules codeowners` prints the suggested lines.
+- **Private repos on GitHub Free (D-025).** Branch protection and required CODEOWNERS reviews aren't available there, so GitHub can't require checks or owner approvals. Capsules still reports every problem in CI, but it can't block a merge. The agent hooks still block live. Once a repo is public (or on a paid plan), make the CI summary job (`ci-ok` in this repo) a required check.
 - **`Capsule-Cosmetic` owner check (D-013, D-016).** For every commit carrying `Capsule-Cosmetic: <address>`, the person who made it must own that capsule, or it is `E030`. In GitHub Actions, that person is the pull request's author, read from the local event file. Elsewhere, it is the commit author (C5.3). An address that names no node is `E003`.
 
 ## C9. Checks and weakened-test signals

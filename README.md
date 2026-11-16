@@ -48,6 +48,11 @@ A blocked edit comes back to the agent with the reason and the fix. Hooks can be
 
 Try it: `node scripts/demo-m4a.mjs` (after `npm run build`).
 
+## Known limits
+
+- **Private repos on GitHub Free can't block merges.** Branch protection and required owner reviews (CODEOWNERS) aren't available there, so GitHub can't require checks or approvals. Capsules still reports every problem in CI, and the agent hooks still block bad edits as they happen, but a merge can go ahead anyway. On a public repo, or a paid plan, make the CI summary job a required check.
+- **Commit trailers can be forged**, and hooks can be bypassed on your own machine. CI, plus owner approval where GitHub supports it, is the real gate.
+
 ## Develop
 
 Requires Node 22 or later.

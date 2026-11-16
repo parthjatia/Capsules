@@ -241,3 +241,10 @@ Newest at the bottom. Entries are never edited, only superseded by a later entry
   1. In a hook, an existing check is a check file that exists on disk and wasn't created earlier in the same session.
   2. Writes through Bash to protected paths (`.capsules/`, existing check files, generated files, CI workflows) are blocked for every agent, with a pointer to the Edit and Write tools, which capsules can check precisely.
   3. A hook records an allowed edit when it allows it. If the tool call is then rejected, the session remembers a change that didn't happen, which can only make the hook stricter.
+
+## D-025: Private repos on GitHub Free can't block merges
+
+- **Date:** 2026-11-16 · **Approved by:** Parth
+- **Changes:** C8, README (known limits)
+- **Decision:** branch protection and required CODEOWNERS reviews aren't available for private repositories on GitHub Free. There, GitHub can't require checks or owner approvals, so capsules reports problems in CI but can't block merges; the agent hooks still block live. When this repo becomes public, make `ci-ok` a required check on `main`.
+- **Also decided:** Claude does its own work on this repo inside a capsules session (`capsules work … --agent default`), so its commits carry `Capsule-*` trailers and the guard treats that work as an agent's, not Parth's.

@@ -129,6 +129,19 @@ function discover(root: string, diagnostics: Diagnostic[]): FoundFile[] {
   return found;
 }
 
+/** The capsule a `.capsules/` path defines (C1), or null if it isn't a capsule file. */
+export function capsuleFromPath(path: string): { id: string; kind: CapsuleKind } | null {
+  if (!path.startsWith(".capsules/") || !path.endsWith(".md")) return null;
+  const parts = path.slice(".capsules/".length, -".md".length).split("/");
+  if (parts[0] === "_concerns")
+    return parts.length === 2 && ID_PART.test(parts[1]!)
+      ? { id: parts[1]!, kind: "concern" }
+      : null;
+  if (parts.some((p) => !ID_PART.test(p))) return null;
+  if (parts[0] === "root") return parts.length === 1 ? { id: "root", kind: "area" } : null;
+  return { id: parts.join("."), kind: "area" };
+}
+
 function readOptional(path: string): string | null {
   return existsSync(path) ? readFileSync(path, "utf8") : null;
 }

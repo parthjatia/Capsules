@@ -37,6 +37,8 @@ jobs:
       matrix: ${{ fromJSON(needs.plan.outputs.matrix) }}
     steps:
       - uses: actions/checkout@v5
+        with:
+          fetch-depth: 0 # capsules check compares against the pull request's base (C6.4)
       - uses: actions/setup-node@v5
         with:
           node-version: ${{ matrix.node }}
@@ -47,14 +49,15 @@ jobs:
       - run: npm run typecheck
       - run: npm run spec:check
       - run: npm test
-      - name: dogfood (validate this repo's own .capsules/)
+      - name: dogfood (guard this repo's own changes with its .capsules/)
         run: node dist/cli.js check --no-run
       - name: demo app tests (must pass unchanged)
         working-directory: examples/billing-demo
         run: npm test
       - name: demo capsules and lockfile are valid and up to date
         working-directory: examples/billing-demo
-        run: node ../../dist/cli.js check --no-run
+        # --base HEAD: the demo is test data, so validate it without guarding this PR's history.
+        run: node ../../dist/cli.js check --no-run --base HEAD
       - name: npx . --version
         shell: bash
         run: |

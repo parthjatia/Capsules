@@ -1,7 +1,8 @@
 format: 0.1
 solo: true
 humans:
-  parth: { github: "parthjatia", owns: ["**"] }
+  # emails: optional. If this repo is public, every email listed here is public too.
+  parth: { github: "parthjatia", owns: ["**"], emails: [] }
 roles:
   builder:
     may: [edit-code, add-checks, edit-context, add-decisions]

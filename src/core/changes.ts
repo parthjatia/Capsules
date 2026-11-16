@@ -265,8 +265,14 @@ export function classify(
   const base = { path: f.path, status: f.status, concerns: [] as string[], actions: [] };
   if (TOOL_FILES.has(f.path) || f.path.startsWith(".capsules/_cache/"))
     return { ...base, kind: "tool", capsule: "root" };
-  if (f.path === ".capsules/config.yaml" || f.path === ".capsules/permissions.yaml") {
-    const action: Action = f.path.endsWith("config.yaml") ? "edit-config" : "edit-permissions";
+  // CI workflows are settings too, even though `.github/**` is ignored: an agent that can
+  // edit them can switch the guard off (D-020).
+  if (
+    f.path === ".capsules/config.yaml" ||
+    f.path === ".capsules/permissions.yaml" ||
+    f.path.startsWith(".github/workflows/")
+  ) {
+    const action: Action = f.path.endsWith("permissions.yaml") ? "edit-permissions" : "edit-config";
     return { ...base, kind: "settings", capsule: "root", actions: [{ action, detail: f.path }] };
   }
   const cap = capsuleFromPath(f.path);

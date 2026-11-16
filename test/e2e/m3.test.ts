@@ -1,5 +1,6 @@
 // M3 end to end: the guard in CI. Real temporary Git repos with scripted commits (F1).
 import { readFileSync, rmSync, writeFileSync } from "node:fs";
+import { mkdirSync } from "node:fs";
 import { join } from "node:path";
 import { afterAll, describe, expect, it } from "vitest";
 import { cleanup, commit, demoHistory, gitIn, run, runEnv } from "./helpers.js";
@@ -376,6 +377,61 @@ describe("permissions via trailers (C5.2, C5.3)", () => {
     edit(dir, INVOICES, "A refund never exceeds", "A refund never, ever exceeds");
     run(dir, "lock");
     commit(dir, "Edit", [], UNKNOWN);
+    expect(codes(dir)).toEqual([]);
+  });
+});
+
+describe("CI workflows and config.yaml are owners only (D-020)", () => {
+  const WORKFLOW = ".github/workflows/ci.yml";
+  const withWorkflow = () => {
+    const dir = demoHistory();
+    mkdirSync(join(dir, ".github", "workflows"), { recursive: true });
+    writeFileSync(join(dir, ...WORKFLOW.split("/")), "steps:\n  - run: capsules check --ci\n");
+    commit(dir, "Add CI");
+    return dir;
+  };
+  const dropGuard = (dir: string) =>
+    edit(dir, WORKFLOW, "  - run: capsules check --ci\n", "  - run: echo skipped\n");
+
+  it("an agent editing a workflow is blocked (E027, edit-config)", () => {
+    const dir = withWorkflow();
+    dropGuard(dir);
+    commit(dir, "Speed up CI", ["Capsule-Agent: billing-agent"]);
+    const e = check(dir, "--no-run").diagnostics.filter((d) => d.code === "E027");
+    expect(e).toHaveLength(1);
+    expect(e[0]!.severity).toBe("error");
+    expect(e[0]!.message).toContain(
+      "by agent billing-agent: edit-config in root is not allowed (the builder role of billing-agent doesn't include edit-config)",
+    );
+    expect(e[0]!.message).toContain(`changed: ${WORKFLOW}`);
+  });
+
+  it("someone who isn't an owner editing a workflow is blocked too", () => {
+    const dir = withWorkflow();
+    dropGuard(dir);
+    commit(dir, "Speed up CI", [], UNKNOWN);
+    expect(codes(dir)).toEqual(["E:E027"]);
+  });
+
+  it("an agent editing config.yaml is blocked", () => {
+    const dir = demoHistory();
+    edit(dir, ".capsules/config.yaml", "weakened-tests: warn", "weakened-tests: off");
+    commit(dir, "Quieter", ["Capsule-Agent: billing-agent"]);
+    expect(codes(dir)).toEqual(["E:E027"]);
+  });
+
+  it("an owner's own commit to a workflow passes", () => {
+    const dir = withWorkflow();
+    dropGuard(dir);
+    commit(dir, "Speed up CI");
+    expect(codes(dir)).toEqual([]);
+  });
+
+  it("other ignored files (docs/**) stay outside the guard", () => {
+    const dir = demoHistory();
+    mkdirSync(join(dir, "docs"), { recursive: true });
+    writeFileSync(join(dir, "docs", "notes.md"), "notes\n");
+    commit(dir, "Notes", ["Capsule-Agent: billing-agent"]);
     expect(codes(dir)).toEqual([]);
   });
 });

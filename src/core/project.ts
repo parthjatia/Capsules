@@ -64,12 +64,7 @@ function discover(root: string, diagnostics: Diagnostic[]): FoundFile[] {
       const stem = name.slice(0, -3);
       const file = `.capsules/_concerns/${name}`;
       if (!ID_PART.test(stem)) {
-        diagnostics.push(
-          msg.E008(
-            { file, line: 1 },
-            `the file name "${stem}" is not a valid capsule id (use lowercase letters, digits and -)`,
-          ),
-        );
+        diagnostics.push(msg.E020({ file, line: 1 }, stem));
         continue;
       }
       found.push({ id: stem, kind: "concern", file });
@@ -93,12 +88,7 @@ function discover(root: string, diagnostics: Diagnostic[]): FoundFile[] {
       if (!name.endsWith(".md")) continue;
       const stem = name.slice(0, -3);
       if (!ID_PART.test(stem)) {
-        diagnostics.push(
-          msg.E008(
-            { file: rel, line: 1 },
-            `the file name "${stem}" is not a valid capsule id (use lowercase letters, digits and -; nest with folders, not dots)`,
-          ),
-        );
+        diagnostics.push(msg.E020({ file: rel, line: 1 }, stem));
         continue;
       }
       if (prefix.length === 0 && stem === "root") {
@@ -112,7 +102,7 @@ function discover(root: string, diagnostics: Diagnostic[]): FoundFile[] {
   walkAreas(base, ".capsules", []);
 
   if (!found.some((f) => f.id === "root" && f.kind === "area")) {
-    diagnostics.push(msg.E013({ file: ".capsules" }, ".capsules", ".capsules/root.md"));
+    diagnostics.push(msg.E023({ file: ".capsules/root.md" }));
   }
   const topAreas = new Map(
     found.filter((f) => f.kind === "area" && !f.id.includes(".")).map((f) => [f.id, f.file]),
@@ -161,12 +151,7 @@ export function loadProject(root: string): Project {
   for (const c of capsules) {
     for (const o of c.front?.owners ?? []) {
       if (!humans.has(o)) {
-        fileDiagnostics.push(
-          msg.E008(
-            { file: c.file, line: 1 },
-            `owner "${o}" is not listed under \`humans\` in .capsules/permissions.yaml`,
-          ),
-        );
+        fileDiagnostics.push(msg.E021({ file: c.file, line: 1 }, o));
       }
     }
   }

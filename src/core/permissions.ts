@@ -75,14 +75,14 @@ export function parsePermissions(
   if (raw === undefined) return defaultPermissions();
   const parsed = PermissionsSchema.safeParse(raw);
   if (!parsed.success) {
-    diagnostics.push(msg.E008_config({ file, line: 1 }, zodProblems(parsed.error)));
+    diagnostics.push(msg.E022({ file, line: 1 }, zodProblems(parsed.error)));
     return defaultPermissions();
   }
   const p = parsed.data;
   for (const [name, agent] of Object.entries(p.agents)) {
     if (!p.roles[agent.role]) {
       diagnostics.push(
-        msg.E008_config(
+        msg.E022(
           { file, line: 1 },
           `agent \`${name}\` has role \`${agent.role}\`, which is not defined under \`roles\``,
         ),

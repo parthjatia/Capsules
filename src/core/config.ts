@@ -88,7 +88,7 @@ export function readYaml(text: string, file: string, diagnostics: Diagnostic[]):
   if (doc.errors.length) {
     const e = doc.errors[0]!;
     diagnostics.push(
-      msg.E008_config(
+      msg.E022(
         { file, line: e.linePos?.[0]?.line ?? 1 },
         `the YAML can't be read (${e.message.split("\n")[0]})`,
       ),
@@ -104,7 +104,7 @@ export function parseConfig(text: string | null, file: string, diagnostics: Diag
   if (raw === undefined) return defaultConfig();
   const parsed = ConfigSchema.safeParse(raw);
   if (!parsed.success) {
-    diagnostics.push(msg.E008_config({ file, line: 1 }, zodProblems(parsed.error)));
+    diagnostics.push(msg.E022({ file, line: 1 }, zodProblems(parsed.error)));
     return defaultConfig();
   }
   return parsed.data;

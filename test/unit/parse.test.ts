@@ -171,8 +171,8 @@ describe("parseCapsuleFile: fields (D-007)", () => {
     expect(r.diagnostics).toEqual([]);
   });
 
-  it("rejects a repeated single-value field (E007)", () => {
-    expect(codes(`${FM}## check t\nrun: x\nrun: y\n`)).toEqual(["E007"]);
+  it("rejects a repeated single-value field (E018)", () => {
+    expect(codes(`${FM}## check t\nrun: x\nrun: y\n`)).toEqual(["E018"]);
   });
 
   it("accepts several refs in one checked-by field", () => {
@@ -180,10 +180,10 @@ describe("parseCapsuleFile: fields (D-007)", () => {
     expect(r.capsule.nodes[0]!.links.map((l) => l.ref.node)).toEqual(["a", "b"]);
   });
 
-  it("validates field values (E007)", () => {
-    expect(codes(`${FM}## contract C1\nx\nscope: everywhere\n`)).toEqual(["E007"]);
-    expect(codes(`${FM}## assumption A1\nx\nreview-by: next year\n`)).toEqual(["E007"]);
-    expect(codes(`${FM}## check t\nrun: x\ntimeout: soon\n`)).toEqual(["E007"]);
+  it("validates field values (E019)", () => {
+    expect(codes(`${FM}## contract C1\nx\nscope: everywhere\n`)).toEqual(["E019"]);
+    expect(codes(`${FM}## assumption A1\nx\nreview-by: next year\n`)).toEqual(["E019"]);
+    expect(codes(`${FM}## check t\nrun: x\ntimeout: soon\n`)).toEqual(["E019"]);
   });
 });
 
@@ -192,13 +192,13 @@ describe("parseCapsuleFile: errors", () => {
     expect(codes(`${FM}## rule R1\nx\n`)).toEqual(["E001"]);
   });
 
-  it("E001 bad id format", () => {
-    expect(codes(`${FM}## contract X1\nx\n`)).toEqual(["E001"]);
-    expect(codes(`${FM}## check Bad_Slug\nrun: x\n`)).toEqual(["E001"]);
+  it("E017 bad id format", () => {
+    expect(codes(`${FM}## contract X1\nx\n`)).toEqual(["E017"]);
+    expect(codes(`${FM}## check Bad_Slug\nrun: x\n`)).toEqual(["E017"]);
   });
 
-  it("E001 heading without an id", () => {
-    expect(codes(`${FM}## intent\nx\n`)).toEqual(["E001"]);
+  it("E016 heading without an id", () => {
+    expect(codes(`${FM}## intent\nx\n`)).toEqual(["E016"]);
   });
 
   it("E002 duplicate node id", () => {
@@ -206,12 +206,12 @@ describe("parseCapsuleFile: errors", () => {
     expect(r.diagnostics.map((d) => [d.code, d.line])).toEqual([["E002", 8]]);
   });
 
-  it("E003 malformed reference", () => {
-    expect(codes(`${FM}## contract C1 serves I1\nx\n`)).toEqual(["E003"]);
+  it("E025 malformed reference", () => {
+    expect(codes(`${FM}## contract C1 serves I1\nx\n`)).toEqual(["E025"]);
   });
 
-  it("E006 unknown link word", () => {
-    expect(codes(`${FM}## contract C1 protects @I1\nx\n`)).toEqual(["E006"]);
+  it("E024 unknown link word", () => {
+    expect(codes(`${FM}## contract C1 protects @I1\nx\n`)).toEqual(["E024"]);
   });
 
   it("E006 link type not allowed from this node type", () => {

@@ -120,7 +120,7 @@ Change these only with Parth's agreement, and log every change in `docs/DECISION
 | B11 | **The hash pipeline is frozen** (C7): SHA-256 of a normalised node, stored as 12 hex characters | Identical on macOS, Linux and Windows |
 | B12 | **`capsules lock` never silently re-pins a link.** Only `refresh` or `relock --cosmetic` do | Staleness can't be hidden by accident |
 | B13 | **CI is the real gate.** Agent hooks and Git hooks are helpful, but can be bypassed | Honest security model |
-| B14 | **TypeScript on Node 20+, published to npm** (`npx`), plus a GitHub Action | Fastest path; same route as OpenSpec |
+| B14 | **TypeScript on Node 22+, published to npm** (`npx`), plus a GitHub Action. CI tests Node 22 and 24 (D-009) | Fastest path; same route as OpenSpec. Node 20 is end-of-life since April 2026 |
 | B15 | **The map is part of v0.1**, generated deterministically from the files | Understanding is the original idea and gives value on day one |
 | B16 | **Language-agnostic.** Checks are shell commands. Language-specific logic exists only in optional weakened-test patterns | Works for any stack |
 
@@ -159,7 +159,9 @@ Rules:
 - **Capsule ids come from paths.** `.capsules/root.md` → `root`. `.capsules/billing.md` → `billing`. `.capsules/billing/invoices.md` → `billing.invoices`. `.capsules/_concerns/pii.md` → `pii`.
 - **Parents.** The parent of `a.b` is `a`; the parent of a top-level capsule is `root`. A folder `billing/` without `billing.md` is error `E013`.
 - **Reserved.** Names starting with `_` are reserved for the tool. Concern ids must not equal a top-level area id (error `E012`).
-- **Ids** are lowercase letters, digits and `-`, separated by `.`.
+- **Ids** are lowercase letters, digits and `-`, separated by `.`. A capsule file name that isn't a valid id (for example `Billing.md` or `a.b.md`) is error `E020`; nest with folders, not dots.
+- **`.capsules/root.md` is required** (error `E023` if missing).
+- **Project root.** The project root is the nearest folder, from the current folder up to the Git top level, that contains `.capsules/`. In a normal repo that is the repository root; in a monorepo or the demo app (`examples/billing-demo`) it can be a subfolder. `git ls-files` runs from the project root, and every path is relative to it (D-008).
 
 ## C2. Capsule file format
 
@@ -220,7 +222,7 @@ src/billing/invoices/create.ts#createInvoice
 | `owners` | list of human keys from `permissions.yaml` | no (inherits from parent) | Who approves intent and contracts |
 | `covers` | list of globs, repo-relative, `/` separators | area: no; concern: yes | Files this capsule describes |
 | `excludes` | list of globs | no | Subtracted from `covers` |
-| `status` | `active` or `draft` | no (default `active`) | Draft capsules report but never block |
+| `status` | `active` or `draft` | no (default `active`) | Draft capsules report but never block: errors found in a draft capsule's file are reported as warnings (D-008) |
 
 ### C2.2 Heading grammar
 
@@ -287,6 +289,16 @@ Errors (`E`) fail `capsules check`. Warnings (`W`) are reported only.
 | E013 | Folder without its capsule file |
 | E014 | Concern covers no files |
 | E015 | Cross-repo address (`<repo>:capsule#node`) is reserved and not supported yet in v0.1. Fix: point to a capsule in this repo, or remove the link until cross-repo links ship |
+| E016 | Node heading can't be read (empty, no id after the type, or a reference with no link type before it) |
+| E017 | Node id has the wrong format for its type (for example `contract X1`; see C2.3) |
+| E018 | A single-value field appears more than once in a node (for example two `run:` lines) |
+| E019 | A field value is invalid (`scope` not `tree`/`own`, `timeout` not a whole number, `review-by` not a date) |
+| E020 | Capsule file name is not a valid capsule id |
+| E021 | A capsule owner is not listed under `humans` in `permissions.yaml` |
+| E022 | `config.yaml` or `permissions.yaml` is invalid, including unknown keys |
+| E023 | `.capsules/root.md` is missing |
+| E024 | Unknown link type word in a heading |
+| E025 | A reference can't be read (not `@node` or `@capsule#node`) |
 | W101 | Tracked file has no home capsule (orphan); see `ignore` in config |
 | W102 | Contract has no `serves` intent |
 | W103 | Contract or example has no check |
@@ -323,6 +335,8 @@ decisions: web#D2 (rejected: client-side tax calculation)
 ```
 
 ## C4. `config.yaml`
+
+Missing keys take the defaults below. **Unknown keys are errors** (`E022`), in `config.yaml` and `permissions.yaml` alike: a typo such as `weakend-tests: block` must never silently fall back to a weaker default (D-008).
 
 ```yaml
 format: 0.1
@@ -578,7 +592,7 @@ Hook protocol facts (verify against [Claude Code hooks docs](https://code.claude
 
 - Input is JSON on stdin, with `tool_name`, `tool_input` (for example `file_path`, `content`, `old_string`, `new_string`), `session_id`, `cwd`, and `agent_type` inside sub-agents.
 - **To block: write the reason to stderr and exit with code 2.** Exit code 1 does **not** block ([source](https://blakecrosley.com/blog/claude-code-hooks-explained)).
-- Hooks must be fast. Target under 150 ms on a 1,000-file repo; cache the parsed index in `_cache/`.
+- Hooks must be fast. Target on a 1,000-file repo: **under 150 ms on macOS and Linux, under 300 ms on Windows** (Node starts more slowly there). To get there, hooks run from a **small separate entry point** that loads only hook code, and read a **saved index** of the parsed capsules from `_cache/`. The index is rebuilt only when a capsule or settings file has changed (D-010).
 - If our hook crashes: with `on-error: open`, print a warning and exit 1, which shows the error and continues. With `closed`, exit 2. Never leave the user's agent stuck because of our bug.
 
 ## C12. Agent commands, skill and judge
@@ -746,7 +760,7 @@ capsules/
 
 ## D3. Stack and dependency rules
 
-- **Runtime:** Node 20+ LTS, TypeScript `strict`, ESM.
+- **Runtime:** Node 22+ LTS, TypeScript `strict`, ESM.
 - **Libraries** (small, popular, no install scripts):
   - `commander` (CLI)
   - `unified`, `remark-parse`, `remark-frontmatter` (Markdown)
@@ -804,7 +818,7 @@ Each milestone must be a finished, demoable product. **Don't start the next mile
 
 ## F2. Quality bars
 
-- `capsules check --no-run` takes under 1 second on a 1,000-file repo. Hooks take under 150 ms.
+- `capsules check --no-run` takes under 1 second on a 1,000-file repo. Hooks take under 150 ms on macOS and Linux, and under 300 ms on Windows (C11).
 - Every user-facing message lives in `src/report/messages.ts` and follows the four-part style: what, where, why it matters, fix.
 - No command changes anything without saying so first. `--dry-run` works on every writing command.
 - No timestamps or random values in committed files. Session ids live only in `_cache` and in trailers.

@@ -39,17 +39,17 @@ export const msg = {
       "capsules only understands its nine node types, so this section would be silently ignored.",
       `Start the heading with one of: ${NODE_TYPE_LIST}. For example: "## contract C1 serves @I1".`,
     ),
-  E001_badHeading: (at: At, heading: string, problem: string) =>
+  E016: (at: At, heading: string, problem: string) =>
     make(
-      "E001",
+      "E016",
       at,
       `Heading "## ${heading}" can't be read: ${problem}.`,
       "a node whose heading can't be read has no address, so nothing can link to it or check it.",
       'Use the form "## <type> <id> <link-type> @<ref>", for example "## decision D2 serves @C1".',
     ),
-  E001_badId: (at: At, type: string, id: string, expected: string) =>
+  E017: (at: At, type: string, id: string, expected: string) =>
     make(
-      "E001",
+      "E017",
       at,
       `"${id}" is not a valid id for a ${type} node (expected ${expected}).`,
       "ids follow a fixed format so addresses like billing#C1 are unambiguous.",
@@ -71,9 +71,9 @@ export const msg = {
       "a broken link means a rule, check or decision is no longer connected to what it protects.",
       "Fix the spelling, or point it at an existing node. `capsules explain <file>` lists the addresses in use.",
     ),
-  E003_malformed: (at: At, ref: string) =>
+  E025: (at: At, ref: string) =>
     make(
-      "E003",
+      "E025",
       at,
       `"${ref}" is not a valid reference.`,
       "a reference that can't be read points to nothing.",
@@ -103,9 +103,9 @@ export const msg = {
       "each link type means one specific thing, and capsules relies on that to find stale and unchecked rules.",
       `\`${linkType}\` links are allowed ${allowed}.`,
     ),
-  E006_unknownLink: (at: At, word: string) =>
+  E024: (at: At, word: string) =>
     make(
-      "E006",
+      "E024",
       at,
       `"${word}" is not a link type.`,
       "unknown link words are ambiguous and would be ignored.",
@@ -135,17 +135,17 @@ export const msg = {
       "an example only means something next to the rule it illustrates; it's what owners approve.",
       `Add the link to the heading: "## example ${id} shows @C1".`,
     ),
-  E007_invalid: (at: At, field: string, value: string, expected: string) =>
+  E019: (at: At, field: string, value: string, expected: string) =>
     make(
-      "E007",
+      "E019",
       at,
       `\`${field}: ${value}\` is not valid (expected ${expected}).`,
       "capsules can't use a field value it can't read.",
       `Change it to ${expected}.`,
     ),
-  E007_repeated: (at: At, field: string, firstLine: number) =>
+  E018: (at: At, field: string, firstLine: number) =>
     make(
-      "E007",
+      "E018",
       at,
       `\`${field}\` appears more than once (first on line ${firstLine}).`,
       "this field holds one value, so a second one makes it unclear which applies.",
@@ -159,9 +159,9 @@ export const msg = {
       "the front matter says which files the capsule covers and who owns it; without it the capsule can't protect anything.",
       'Start the file with a "---" block, e.g. "---\\ntitle: Billing\\ncovers:\\n  - src/billing/**\\n---".',
     ),
-  E008_config: (at: At, problem: string) =>
+  E022: (at: At, problem: string) =>
     make(
-      "E008",
+      "E022",
       at,
       `Settings file is invalid: ${problem}.`,
       "capsules can't apply settings it can't read, and guessing could weaken protection.",
@@ -198,6 +198,30 @@ export const msg = {
       `${ref} is a cross-repo address (repo "${repo}"). Cross-repo links are not supported yet in v0.1.`,
       "the `<repo>:` prefix is reserved so cross-repo links can be added later without breaking files.",
       "Point to a capsule in this repo, or remove the link until cross-repo links ship.",
+    ),
+  E020: (at: At, stem: string) =>
+    make(
+      "E020",
+      at,
+      `The file name "${stem}" is not a valid capsule id.`,
+      "a capsule's id comes from its file name, and every address (like billing#C1) depends on it.",
+      "Rename the file using lowercase letters, digits and -. Nest capsules with folders, not dots: .capsules/billing/invoices.md.",
+    ),
+  E021: (at: At, owner: string) =>
+    make(
+      "E021",
+      at,
+      `Owner "${owner}" is not listed under \`humans\` in .capsules/permissions.yaml.`,
+      "only listed humans can approve changes; an unknown owner means nobody can.",
+      `Add "${owner}" under \`humans\` in .capsules/permissions.yaml, or fix the spelling in \`owners\`.`,
+    ),
+  E023: (at: At) =>
+    make(
+      "E023",
+      at,
+      "The root capsule .capsules/root.md is missing.",
+      "every area capsule nests under root, so without it the tree has no top.",
+      'Create .capsules/root.md with front matter, e.g. "---\\ntitle: My app\\n---", and an intent describing the whole product.',
     ),
   W101: (file: string) =>
     make(

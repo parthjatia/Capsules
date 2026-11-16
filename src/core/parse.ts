@@ -233,7 +233,7 @@ function readNode(
 
   const [type, id, ...rest] = tokens;
   if (!type) {
-    diagnostics.push(msg.E001_badHeading(at, heading, "it is empty"));
+    diagnostics.push(msg.E016(at, heading, "it is empty"));
     return null;
   }
   if (!(NODE_TYPES as readonly string[]).includes(type)) {
@@ -243,11 +243,11 @@ function readNode(
   const nodeType = type as NodeType;
   const rule = TYPE_RULES[nodeType];
   if (!id) {
-    diagnostics.push(msg.E001_badHeading(at, heading, "it has no id after the type"));
+    diagnostics.push(msg.E016(at, heading, "it has no id after the type"));
     return null;
   }
   if (!rule.id.test(id)) {
-    diagnostics.push(msg.E001_badId(at, nodeType, id, rule.idHint));
+    diagnostics.push(msg.E017(at, nodeType, id, rule.idHint));
     return null;
   }
 
@@ -259,9 +259,7 @@ function readNode(
     if (tok.startsWith("@")) {
       if (skipping) continue;
       if (!current) {
-        diagnostics.push(
-          msg.E001_badHeading(at, heading, `reference ${tok} has no link type before it`),
-        );
+        diagnostics.push(msg.E016(at, heading, `reference ${tok} has no link type before it`));
         continue;
       }
       const ref = readRef(tok, headingLine, file, diagnostics);
@@ -276,9 +274,9 @@ function readNode(
       }
     } else if (current) {
       // A word where a reference was expected, e.g. `serves I1` instead of `serves @I1`.
-      diagnostics.push(msg.E003_malformed(at, tok));
+      diagnostics.push(msg.E025(at, tok));
     } else {
-      diagnostics.push(msg.E006_unknownLink(at, tok));
+      diagnostics.push(msg.E024(at, tok));
       skipping = true;
     }
   }
@@ -298,7 +296,7 @@ function readNode(
       const repeatable = rule.fields[key];
       const prev = firstSeen.get(key);
       if (prev !== undefined && !repeatable) {
-        diagnostics.push(msg.E007_repeated({ file, line: ln }, key, prev));
+        diagnostics.push(msg.E018({ file, line: ln }, key, prev));
         continue;
       }
       firstSeen.set(key, ln);
@@ -347,7 +345,7 @@ function readRef(text: string, line: number, file: string, diagnostics: Diagnost
   const p = parseAddress(text, { ref: true });
   if (p.ok) return { raw: text, capsule: p.capsule, node: p.node, line };
   if (p.reason === "cross-repo") diagnostics.push(msg.E015({ file, line }, text, p.repo));
-  else diagnostics.push(msg.E003_malformed({ file, line }, text));
+  else diagnostics.push(msg.E025({ file, line }, text));
   return null;
 }
 
@@ -374,14 +372,12 @@ function checkFields(node: CapsuleNode, file: string, diagnostics: Diagnostic[])
   }
   const scope = get("scope");
   if (scope && scope.value !== "tree" && scope.value !== "own") {
-    diagnostics.push(
-      msg.E007_invalid({ file, line: scope.line }, "scope", scope.value, "`tree` or `own`"),
-    );
+    diagnostics.push(msg.E019({ file, line: scope.line }, "scope", scope.value, "`tree` or `own`"));
   }
   const timeout = get("timeout");
   if (timeout && !/^[1-9][0-9]*$/.test(timeout.value)) {
     diagnostics.push(
-      msg.E007_invalid(
+      msg.E019(
         { file, line: timeout.line },
         "timeout",
         timeout.value,
@@ -392,12 +388,7 @@ function checkFields(node: CapsuleNode, file: string, diagnostics: Diagnostic[])
   const review = get("review-by");
   if (review && !isIsoDate(review.value)) {
     diagnostics.push(
-      msg.E007_invalid(
-        { file, line: review.line },
-        "review-by",
-        review.value,
-        "a date like `2027-06-01`",
-      ),
+      msg.E019({ file, line: review.line }, "review-by", review.value, "a date like `2027-06-01`"),
     );
   }
   const tripwire = get("tripwire");
@@ -405,8 +396,7 @@ function checkFields(node: CapsuleNode, file: string, diagnostics: Diagnostic[])
     const p = parseAddress(tripwire.value, { ref: true });
     if (!p.ok && p.reason === "cross-repo")
       diagnostics.push(msg.E015({ file, line: tripwire.line }, tripwire.value, p.repo));
-    else if (!p.ok)
-      diagnostics.push(msg.E003_malformed({ file, line: tripwire.line }, tripwire.value));
+    else if (!p.ok) diagnostics.push(msg.E025({ file, line: tripwire.line }, tripwire.value));
   }
 }
 

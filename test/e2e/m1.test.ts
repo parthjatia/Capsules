@@ -175,9 +175,9 @@ describe("check --no-run validation (C2.6)", () => {
     expect(codes).toContain("E013");
   });
 
-  it("E013: root.md missing", () => {
+  it("E023: root.md missing", () => {
     const dir = makeRepo({ ".capsules/web.md": `${FM("Web", ["src/**"])}`, "src/a.ts": "" });
-    expect(codesOf(dir)).toContain("E013");
+    expect(codesOf(dir)).toContain("E023");
   });
 
   it("E014: a concern that covers nothing", () => {
@@ -189,16 +189,21 @@ describe("check --no-run validation (C2.6)", () => {
     expect(codesOf(dir)).toEqual(["E014"]);
   });
 
-  it("E008: owner not in permissions, bad config key", () => {
+  it("E021 owner not in permissions, E022 bad config key, E020 bad file name", () => {
     const dir = makeRepo({
       ".capsules/root.md": `${FM("Root", ["**"], "owners: [nobody]\n")}`,
       ".capsules/config.yaml": "ignore: []\nweakend-tests: warn\n",
+      ".capsules/Billing.md": `${FM("Billing", ["src/**"])}`,
       "a.ts": "",
     });
     const r = JSON.parse(run(dir, "check", "--no-run", "--json").stdout);
-    const messages = r.diagnostics.map((d: { message: string }) => d.message).join("\n");
-    expect(messages).toContain('owner "nobody" is not listed');
-    expect(messages).toContain("unknown key `weakend-tests`");
+    const byCode = Object.fromEntries(
+      r.diagnostics.map((d: { code: string; message: string }) => [d.code, d.message]),
+    );
+    expect(Object.keys(byCode).sort()).toEqual(["E020", "E021", "E022"]);
+    expect(byCode.E021).toContain('Owner "nobody" is not listed');
+    expect(byCode.E022).toContain("unknown key `weakend-tests`");
+    expect(byCode.E020).toContain('"Billing" is not a valid capsule id');
   });
 
   it("W105 and W106: assumption past review, missing code path", () => {

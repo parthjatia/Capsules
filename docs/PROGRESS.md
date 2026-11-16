@@ -43,7 +43,7 @@ Setup: 1,012 tracked files, 12 capsules, Windows 11, Node 24, median of 10–15 
 
 Where the time goes: Node itself takes about 70 ms. Loading our 1.5 MB bundle (Markdown parser, YAML, zod) takes about 85 ms. Reading and validating every capsule plus `git ls-files` take about 200 ms. Linux and macOS usually start Node about twice as fast as Windows.
 
-Options for the hook (Parth to choose before M4):
+Options for the hook (Parth chose option 1, see D-010):
 
 1. **Recommended: a small separate hook entry point plus a cached index.** `capsules hook` loads only a tiny file. It reads the parsed index from `.capsules/_cache/`, which C11 already asks for, and re-parses only when a capsule file's timestamp or size changes. Expected cost is Node start plus about 20–40 ms, roughly 100 ms on Windows.
 2. **Load command code only when it's needed**, inside the one bundle. This is simpler, but it saves only the 85 ms of loading. A hook would still parse everything, at about 250 ms.
@@ -62,12 +62,15 @@ node ../../dist/cli.js explain src/web/checkout.tsx
 
 You should see the checkout page's home (`web`), parents (`root`), concerns (`payments, pii`) and the five rules that apply. Run `npm run build` in the repo root first if `dist/` is missing.
 
+## Decided since M1
+
+- D-008: approved, with each error situation getting its own code (D-011, E016 to E025).
+- Hook speed: option 1, with targets of 150 ms on macOS/Linux and 300 ms on Windows; measure again in M4 (D-010).
+- Node 22+, and CI tests Node 22 and 24; macOS runs only for main (D-009).
+
 ## Open questions for Parth
 
-1. **D-008** lists the gaps in the spec I filled during M1. Please approve or change them.
-2. **Hook speed:** pick option 1, 2 or 3 above. Needed before M4.
-3. **Node 20 has been end-of-life since April 2026.** Should we raise the minimum to Node 22 (changes B14)? For now we stay on Node 20+ with older tool versions (vitest 4, tsup 8).
-4. The remaining I4 questions: whether `init` installs the commit-msg hook by default, which concerns the design partners care about most, and Cursor support beyond compiled rules.
+1. The remaining I4 questions: whether `init` installs the commit-msg hook by default, which concerns the design partners care about most, and Cursor support beyond compiled rules.
 
 ## Notes
 

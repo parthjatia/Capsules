@@ -12,7 +12,7 @@ Capsules is a free, open-source command-line tool that keeps a Git-stored, neste
 
 ## Develop
 
-Requires Node 20 or later.
+Requires Node 22 or later.
 
 ```sh
 npm install

@@ -5,6 +5,7 @@ import { VERSION } from "../version.js";
 import { runHook } from "../hooks/main.js";
 import { check, type CheckOptions } from "./commands/check.js";
 import { codeowners } from "./commands/codeowners.js";
+import { map, type MapOptions } from "./commands/map.js";
 import { compile } from "./commands/compile.js";
 import { context, type ContextOptions } from "./commands/context.js";
 import { doctorCmd, init, remove } from "./commands/install.js";
@@ -180,6 +181,22 @@ export function buildProgram(io: Io, setExit: (code: number) => void): Command {
     .action((commit: string | undefined, opts: { json?: boolean }) =>
       setExit(verdictShow(io, commit, opts)),
     );
+
+  program
+    .command("map")
+    .description(
+      "draw the map: areas, concerns, rules, what needs attention, and a file search (HTML, offline)",
+    )
+    .option(
+      "--format <format>",
+      "html (default, written to .capsules/_cache/map.html), mermaid or json",
+    )
+    .option("--out <file>", "write to this file instead")
+    .option("--open", "open the HTML map in your browser")
+    .option("--base <ref>", "compare against this branch or commit when finding unreviewed checks")
+    .option("--dry-run", "say where the map would be written, without writing it")
+    .option("--json", "print JSON instead of text")
+    .action((opts: MapOptions) => setExit(map(io, opts)));
 
   program
     .command("codeowners")

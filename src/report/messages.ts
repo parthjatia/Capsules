@@ -438,6 +438,10 @@ export const errors = {
   badBase: (ref: string) =>
     `--base ${ref} doesn't name a commit in this repository.
   fix: use a branch, tag or commit that exists, e.g. --base main. If it only exists on the remote, run \`git fetch\` first.`,
+  mapFormat: (v: string) =>
+    `--format must be html, mermaid or json, not "${v}".\n  fix: use --format html (the default), --format mermaid or --format json.`,
+  mapOpenNeedsHtml: () =>
+    "--open only works with the HTML map.\n  fix: drop --open, or use --format html (the default).",
   contextFor: (v: string) =>
     `--for must be builder or judge, not "${v}".\n  fix: use --for builder (the default) or --for judge.`,
   contextBudget: (v: string) =>
@@ -528,4 +532,15 @@ export const hookMsg = {
     (open
       ? "The change was allowed (hooks.on-error: open). This is a bug in capsules; CI still checks the change.\n"
       : "The change was blocked (hooks.on-error: closed). This is a bug in capsules; set hooks.on-error to open to continue.\n"),
+};
+
+/** `capsules map` (C14). */
+export const mapMsg = {
+  wrote: (path: string, summary: string, opening: boolean) =>
+    `Wrote the capsules map: ${path}\n  ${summary}\n` +
+    (opening
+      ? "Opening it in your browser. It works offline and makes no network requests.\n"
+      : "Open it in a browser (or run `capsules map --open`). It works offline and makes no network requests.\n"),
+  dryRun: (path: string) =>
+    `Dry run: would write the capsules map to ${path}. Nothing was changed.\n`,
 };

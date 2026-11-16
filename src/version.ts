@@ -1,5 +1,5 @@
 // Kept in sync with package.json "version" (enforced by test/unit/version.test.ts).
-export const VERSION = "0.0.0";
+export const VERSION = "0.1.0-rc.1";
 
 // Version of the capsule file format (C4 `format:`), separate from the CLI version (F3).
 export const FORMAT_VERSION = "0.1";

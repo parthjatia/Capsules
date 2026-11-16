@@ -1,6 +1,6 @@
 {
   "name": "@pyscoparth/capsules",
-  "version": "0.0.0",
+  "version": "0.1.0-rc.1",
   "description": "A Git-stored, nested record of what each part of an AI-built app is meant to do, and a guard that stops agents from quietly breaking it. Makes no AI or network calls.",
   "private": true,
   "license": "Apache-2.0",
@@ -27,7 +27,9 @@
     "format:check": "prettier --check .",
     "test": "npm run build && vitest run",
     "spec:sync": "node scripts/sync-spec.mjs",
-    "spec:check": "node scripts/sync-spec.mjs --check"
+    "spec:check": "node scripts/sync-spec.mjs --check",
+    "pack:partner": "node scripts/pack-partner.mjs",
+    "try:partner": "node scripts/try-partner-install.mjs"
   },
   "dependencies": {
     "commander": "^14.0.3",

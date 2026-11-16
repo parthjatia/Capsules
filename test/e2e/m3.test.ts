@@ -371,12 +371,7 @@ describe("permissions via trailers (C5.2, C5.3)", () => {
 
   it("an email in the emails list identifies the human", () => {
     const dir = demoHistory();
-    edit(
-      dir,
-      ".capsules/permissions.yaml",
-      "emails: []",
-      `emails: ["${UNKNOWN.toUpperCase()}"]`,
-    );
+    edit(dir, ".capsules/permissions.yaml", "emails: []", `emails: ["${UNKNOWN.toUpperCase()}"]`);
     commit(dir, "Add email");
     edit(dir, INVOICES, "A refund never exceeds", "A refund never, ever exceeds");
     run(dir, "lock");

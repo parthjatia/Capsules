@@ -1,0 +1,44 @@
+{
+  "format": "0.1",
+  "files": [
+    {
+      "path": ".claude/agents/capsules-drafter.md",
+      "blob": "53ef8fe72343b6094f804db033baea8954e4c068"
+    },
+    {
+      "path": ".claude/agents/capsules-judge.md",
+      "blob": "6c4cf38d66d9557c110ab7191639da5169d57af0"
+    },
+    {
+      "path": ".claude/commands/capsules-draft.md",
+      "blob": "ba2109d22e522831bed4b02b2787d3dd82841897"
+    },
+    {
+      "path": ".claude/commands/capsules-judge.md",
+      "blob": "796f473c358ea98366029804e3d352d7c6c54b15"
+    },
+    {
+      "path": ".claude/commands/capsules-work.md",
+      "blob": "38594af33d445cc6a2e77069f710f0fb3fd92bfb"
+    },
+    {
+      "path": ".claude/skills/capsules/SKILL.md",
+      "blob": "6753371baf0786e1ad489a71adbcd40591b3979e"
+    }
+  ],
+  "dirs": [
+    ".claude",
+    ".claude/agents",
+    ".claude/commands",
+    ".claude/rules",
+    ".claude/skills",
+    ".claude/skills/capsules",
+    ".cursor",
+    ".cursor/rules"
+  ],
+  "generated": [
+    "claude-code"
+  ],
+  "agentsMd": null,
+  "createdCapsules": false
+}

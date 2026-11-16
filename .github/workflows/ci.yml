@@ -34,6 +34,11 @@ jobs:
       - run: npm run typecheck
       - run: npm run spec:check
       - run: npm test
+      - name: dogfood (validate this repo's own .capsules/)
+        run: node dist/cli.js check --no-run
+      - name: demo app tests (must pass unchanged)
+        working-directory: examples/billing-demo
+        run: npm test
       - name: npx . --version
         shell: bash
         run: |

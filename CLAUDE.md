@@ -230,7 +230,7 @@ src/billing/invoices/create.ts#createInvoice
 
 - `<ref>` is `@<node-id>` (same capsule) or `@<capsule-id>#<node-id>` (another capsule).
 - **Reserved repo prefix.** `@<repo>:<capsule-id>#<node-id>` (for example `@payments-service:billing#C3`) is reserved for future cross-repo links. `<repo>` uses the same characters as an id segment. v0.1 parses it and rejects it with `E015`. The `:` character is therefore never allowed inside a capsule or node id. This applies everywhere an address appears: heading links, `checked-by:`, `tripwire:`, `{{ @ref }}` transclusions, and CLI arguments such as `capsules why <address>` (which exit `64` with the same message).
-- Body **fields** are `key: value` lines at the start of the body. The first line that isn't a known field starts free text. Fields may repeat where noted.
+- Body **fields** are `key: value` lines. A line is a field only if, on its own line, it starts with a key that is **valid for that node type** (C2.3; for example `checked-by`, `run`, `files`, `rejected`), immediately followed by `:`. Fields may appear anywhere in the body, before or after the prose. Any other `word: text` line stays prose. Lines inside code blocks (fenced or indented) are never fields. Blank lines directly under the heading are ignored, so Markdown formatters can't change a capsule's meaning. Fields may repeat where noted.
 - `checked-by:` may appear as a field or as a heading link. Both mean the same thing.
 
 ### C2.3 Node types

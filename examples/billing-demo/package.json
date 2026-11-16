@@ -1,0 +1,10 @@
+{
+  "name": "billing-demo",
+  "version": "1.0.0",
+  "private": true,
+  "description": "A tiny billing app used to demo capsules. No dependencies.",
+  "type": "module",
+  "scripts": {
+    "test": "node --test"
+  }
+}

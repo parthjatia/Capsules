@@ -1,0 +1,33 @@
+format: 0.1
+agents: [claude-code]
+ignore:
+  - ".capsules/**"
+  - ".claude/**"
+  - ".cursor/**"
+  - ".github/**"
+  - "README.md"
+  - "CHANGELOG.md"
+  - "docs/**"
+  - "package.json"
+  - "**/package-lock.json"
+  - "**/pnpm-lock.yaml"
+  - "**/yarn.lock"
+checks:
+  files:
+    - "tests/**"
+    - "**/*.test.*"
+    - "**/*.spec.*"
+  timeout-seconds: 300
+one-rule:
+  new-checks-with-code: allow
+weakened-tests: warn
+stale-links: warn
+ci:
+  mode: report
+hooks:
+  on-error: open
+rules:
+  max-chars: 6000
+build:
+  test: "npm test"
+  outputs: []

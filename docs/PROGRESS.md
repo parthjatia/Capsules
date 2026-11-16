@@ -29,7 +29,7 @@
 - **CI:** also validates this repo's own `.capsules/` and runs the demo app's tests.
 - Merged into `main` (PR #3), with decisions D-008 to D-011.
 
-### M2: Fingerprints and staleness (in review, waiting for Parth's go)
+### M2: Fingerprints and staleness
 
 - **Fingerprints** (`src/core/hash.ts`): the frozen C7.1 pipeline for nodes; RFC 8785 JSON Canonicalization for front matter (D-012). The exact values are pinned in tests and cross-checked with Python.
 - **Lockfile** (`src/core/lock.ts`): `.capsules/capsules.lock` in the C7.2 format, sorted, LF only, byte-identical on every run and OS.
@@ -43,6 +43,33 @@
 - **Safety:** `lock` refuses to write while capsules have errors, or when the lockfile can't be read, so pins are never lost silently.
 - **Lockfiles** are committed for this repo and the demo. CI fails if either goes out of date.
 - **Tests:** 127 (unit and end-to-end), including F1 scenario 3 and the determinism checks.
+- Merged into `main` (PR #4), with decisions D-012 to D-015.
+
+### M3: Guard in CI (in review, waiting for Parth's go)
+
+- **The base** (`src/core/base.ts`, C6.4, D-018):
+  - `--base <ref>` if given.
+  - In GitHub Actions, the PR's base from the local event file.
+  - Otherwise the remote's default branch, then local `main`, then uncommitted changes only.
+- **Change units** (`src/core/changes.ts`, C6.1):
+  - each commit;
+  - each `Capsule-Session` with several commits;
+  - all commits without a session trailer, together (the whole-PR unit);
+  - uncommitted changes.
+- **Who made a change** (`src/core/identity.ts`, C5.3, D-017): the `Capsule-Agent` trailer, else the author's email. GitHub noreply addresses map to the handle automatically, otherwise the optional `emails` list is used.
+- **The guard** (`src/core/guard.ts`):
+  - permissions per commit (`E027`), and owner approval for intents, contracts and examples (`W108`, which GitHub enforces, D-016);
+  - the one rule (`E028`, `E029`);
+  - append-only decisions (`E009`);
+  - weakened-test signals (`W107`);
+  - the owner check for `Capsule-Cosmetic` (`E030`).
+- **Checks runner** (`src/checks/runner.ts`): runs the checks of affected capsules, or all of them with `--all`, one at a time. Failures are `E031` with the end of the output, timeouts are `E032`. On a timeout the whole process tree is stopped, so a hanging test can't freeze capsules. Results go to `.capsules/_cache/last-check.json`.
+- **`check` options:** `--base`, `--all`, `--no-run`, `--ci` (exit code follows `ci.mode`) and `--json`.
+- **Demo script:** `node scripts/demo-m3.mjs`.
+- **CI** checks out full history, so the dogfood step guards this repo's own pull requests.
+- **CI workflows** (`.github/workflows/**`) and `.capsules/config.yaml` are owners only (D-020).
+- **Windows CI** prints the time of every test, to spot the stall seen once during development.
+- **Tests:** 176 (unit and end-to-end), including F1 scenarios 1, 2, 5 and 6.
 
 ## Speed measurements (M1, as asked in D-006)
 
@@ -67,7 +94,23 @@ Options for the hook (Parth chose option 1, see D-010):
 
 ## Next
 
-- **M3: Guard in CI.** Checks runner, the one rule, append-only decisions (E009), weakened-test signals, permissions via trailers, `check --base`, and the owner check for `Capsule-Cosmetic` (D-013).
+- **M4: Agent integration.**
+  - `compile` and the agent hooks (with the fast hook entry point, D-010), plus sessions.
+  - The commands, the judge and drafter sub-agents, and the skill.
+  - `verdict`, `init`, `remove`, `doctor` and `installed.json`.
+  - The `commit-msg` hook that adds `Capsule-Cosmetic` and session trailers.
+  - Make this repo's root capsule `active` instead of `draft`, so capsules guards its own repo with errors, not warnings.
+  - Before starting: verify the hook facts in the official Claude Code docs and cite them.
+
+## How to demo M3
+
+From the repository root:
+
+```sh
+node scripts/demo-m3.mjs
+```
+
+It copies the demo app to a temporary folder and commits it on `main`. On a new branch, one commit changes the invoice code (planting a bug) and deletes the test line that would have caught it. Then it runs `capsules check`. All 4 checks pass, because the weakened test no longer catches the bug, but the check is refused with `error E028  One change touched both code and an existing check that judges it.`, and the script ends with exit code 1.
 
 ## How to demo M2
 
@@ -95,6 +138,7 @@ You should see the checkout page's home (`web`), parents (`root`), concerns (`pa
 - Node 22+, and CI tests Node 22 and 24; macOS runs only for main (D-009).
 - Front matter fingerprint uses RFC 8785 (D-012); `relock --cosmetic` prints the trailer (D-013).
 - New codes E026, W109, W110 approved (D-014); replaced decisions are skipped in stale reports, with one summary line (D-015).
+- Approvals are enforced by GitHub; the cosmetic owner check reads the event file (D-016). Commit identity via noreply addresses and optional `emails` (D-017). Default base (D-018). D-019 approved; CI workflows protected (D-020). This repo now commits with the GitHub noreply address.
 
 ## Open questions for Parth
 

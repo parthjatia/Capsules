@@ -138,3 +138,62 @@ Newest at the bottom. Entries are never edited, only superseded by a later entry
 - **Changes:** C7.4
 - **Decision:** stale links whose source is a decision that another decision `supersedes` are not reported as `W104`, and don't count in `status`. `status`, `check`, `lock`, `refresh` and `relock` print one summary line instead, e.g. `1 replaced decision skipped (billing.invoices#D3, replaced by billing.invoices#D7)`.
 - **Why:** a replaced decision is history. Flagging it for review is noise that hides the items that need attention.
+
+## D-016: Approvals are enforced by GitHub; the cosmetic owner check reads the event file
+
+- **Date:** 2026-11-16 · **Approved by:** Parth
+- **Changes:** C5.2, C8, C2.6 (W108 wording)
+- **Decision:** GitHub enforces owner approvals through CODEOWNERS and branch protection. `capsules check` reports changes that need approval (`W108`), but never contacts GitHub (B1). For the `Capsule-Cosmetic` owner check (`E030`), capsules reads the pull request author from the GitHub Actions event file (`GITHUB_EVENT_PATH`), which is a local file. Outside GitHub Actions it uses the commit author.
+- **Future option (not v0.1):** the GitHub Action wrapper, not the CLI, may later read PR approvals through the GitHub API using the job's token, and pass them to the CLI as a local file.
+
+## D-017: Identifying the human behind a commit
+
+- **Date:** 2026-11-16 · **Approved by:** Parth
+- **Changes:** C5 (example), new C5.3
+- **Decision:** a commit author's email maps to a human in `permissions.yaml` in this order:
+  1. GitHub noreply addresses (`<id>+<handle>@users.noreply.github.com`) map to the human with that `github` handle automatically.
+  2. Otherwise, a match in that human's optional `emails` list.
+  3. Unknown authors act as `default`.
+- `permissions.yaml` carries a comment that listed emails are public if the repo is public.
+
+## D-018: Default base for `capsules check`
+
+- **Date:** 2026-11-16 · **Approved by:** Parth
+- **Changes:** new C6.4
+- **Decision:** without `--base`, capsules looks for a base in this order:
+  1. In GitHub Actions, the PR's real base from the local event file.
+  2. Otherwise the remote's default branch.
+  3. With no remote, local `main`.
+  4. Otherwise uncommitted changes only.
+     The base is the merge base with `HEAD`. Uncommitted changes are always one extra change unit.
+
+## D-019: M3 codes and interpretations
+
+- **Date:** 2026-11-16 · **Approved by:** Parth, apart from point 8, which D-020 replaces.
+- **Codes:**
+  - `E027` not allowed by permissions
+  - `E028` one rule V1
+  - `E029` one rule V2
+  - `E030` `Capsule-Cosmetic` used by a non-owner
+  - `E031` check failed
+  - `E032` check timed out
+- **Interpretations** (D-019.1 to D-019.11):
+  1. A changed **assumption** needs `propose-contracts` (owner approval), because decisions rest on it. Adding one stays `add-decisions`.
+  2. A **prompt** node is classed with `edit-context`. The prompt file it points to is app code (`edit-code`).
+  3. "Unreviewed" new checks (C6.2) are a report-only list in `check` output and `--json`. They are not a warning code, because they clear once the PR is merged with an owner's approval.
+  4. `W108` is a warning in every mode, because GitHub, not capsules, enforces the approval (D-016).
+  5. **Uncommitted changes** are made by the person in `git config user.email` (the author of the next commit), mapped as in C5.3. Sessions (M4) will take precedence.
+  6. **No history yet:** in a repo with no commits there is nothing to compare against, so the history-based checks (permissions, one rule, E009, W107) are skipped. Validation still runs.
+  7. **V2 needs an existing intent:** adding a new intent together with the contracts that serve it is how a capsule is born, so only a **modified or deleted** intent counts. The contract or example may be added, changed or removed.
+  8. ~~**Ignored files** are outside the guard.~~ Replaced by D-020: ignored files need no capsule and are not code, but CI workflows and `.capsules/config.yaml` are `edit-config` (owners only).
+  9. **Affected capsules** (C9.1) also include a capsule whose own file changed, so changing a check node runs it.
+  10. **Merge commits** are skipped (`git log --no-merges`); their content belongs to the commits they merge.
+  11. **Merged findings:** when the same code and check break the one rule for several capsules (for example an area and a concern), one `E028` names all of them.
+
+## D-020: CI workflows are protected like config.yaml
+
+- **Date:** 2026-11-16 · **Approved by:** Parth
+- **Changes:** C5.1, C5.2 step 1
+- **Decision:** a change to `.github/workflows/**` or `.capsules/config.yaml` is `edit-config`, which only owners may do (no role grants it by default). An agent's commit, or a commit by someone who isn't an owner, is `E027`. Other ignored files (for example `docs/**`) stay outside the guard.
+- **Why:** an agent that can edit the CI workflow can switch the guard off, for example by deleting the `capsules check` step.
+- **On this repo:** workflow changes go in their own commit, for an owner to approve in the PR review.

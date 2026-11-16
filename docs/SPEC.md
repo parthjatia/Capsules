@@ -174,6 +174,12 @@ Errors (`E`) fail `capsules check`. Warnings (`W`) are reported only.
 | E024 | Unknown link type word in a heading |
 | E025 | A reference can't be read (not `@node` or `@capsule#node`) |
 | E026 | `capsules.lock` can't be read (a line doesn't match the C7.2 format) |
+| E027 | A change is not allowed by `permissions.yaml` (role, scope, `blocked-by`, or an unknown agent) |
+| E028 | The one rule, V1: one change touched code and an existing check that judges it (C6.2) |
+| E029 | The one rule, V2: one change touched a contract or example and the intent it serves (C6.2) |
+| E030 | `Capsule-Cosmetic` was used by someone who doesn't own that capsule (C8) |
+| E031 | A check command failed |
+| E032 | A check command timed out |
 | W101 | Tracked file has no home capsule (orphan); see `ignore` in config |
 | W102 | Contract has no `serves` intent |
 | W103 | Contract or example has no check |
@@ -181,7 +187,7 @@ Errors (`E`) fail `capsules check`. Warnings (`W`) are reported only.
 | W105 | Assumption past its `review-by` date |
 | W106 | `code` path does not exist |
 | W107 | Weakened-test signal (C9) |
-| W108 | Change needs owner approval (solo mode) |
+| W108 | Change needs owner approval; GitHub enforces it through CODEOWNERS (D-016) |
 | W109 | A `prompt` node's `file` does not exist |
 | W110 | Stale prompt: the prompt file changed since it was locked (C7.4) |
 
@@ -259,7 +265,8 @@ build:                             # used only by `capsules doctor`
 format: 0.1
 solo: true
 humans:
-  parth: { github: "<github-handle>", owns: ["**"] }
+  # emails: optional. If this repo is public, every email listed here is public too.
+  parth: { github: "<github-handle>", owns: ["**"], emails: [] }
 roles:
   builder:
     may: [edit-code, add-checks, edit-context, add-decisions]
@@ -286,7 +293,7 @@ agents:                            # names match Claude Code sub-agent names whe
 | `edit-context` | `context` nodes |
 | `add-decisions` | New `decision` and `assumption` nodes. Existing decisions are immutable for everyone |
 | `propose-intent`, `propose-contracts`, `propose-examples` | Change those nodes. CI then requires owner approval (warning in solo mode) |
-| `edit-permissions`, `edit-config` | Humans only |
+| `edit-permissions`, `edit-config` | Humans only. `edit-config` covers `.capsules/config.yaml` and CI workflows (`.github/workflows/**`), so an agent can't switch the guard off (D-020) |
 | (none) | Generated agent files: only `capsules compile` writes them |
 | (none) | Tool-written files `capsules.lock` and `installed.json`: only the tool's own commands write them (`lock`, `refresh`, `relock`, `init`, `remove`). Hooks block direct edits. `refresh` of links **from** an intent, contract or example needs the same approval as editing that node (`propose-*`); `relock --cosmetic` is owners only |
 
@@ -297,6 +304,7 @@ Owners may do everything in capsules they own. Humans who aren't owners act as `
 Input: file `F`, actor `A` (agent name or human), and its role `R`, `capsules` patterns `S` and `blocked-by` list `B`.
 
 1. **Classify the change:**
+   - `F` is `.capsules/config.yaml` or under `.github/workflows/` → `edit-config`, owners only, even though `.github/**` is in `ignore` (D-020). `F` is `.capsules/permissions.yaml` → `edit-permissions`.
    - `F` matches `checks.files` or a check's `files`, and existed at the base → existing check (`change-checks`, or `add-checks` if purely additive).
    - `F` is new and a check file → `add-checks`.
    - `F` is under `.capsules/` → parse before and after, diff the nodes, and map each changed node to its action. Front matter changes need `propose-contracts`.
@@ -305,7 +313,17 @@ Input: file `F`, actor `A` (agent name or human), and its role `R`, `capsules` p
    - Otherwise → `edit-code`.
 2. **Find the capsules:** the home of `F` (C2.7), or the capsule whose file is being edited.
 3. **Allow only if** `R` allows the action, **and** the home capsule matches a pattern in `S`, **and** none of `F`'s concerns is in `B`.
-4. `propose-*` actions are allowed locally, then flagged for owner approval in CI.
+4. `propose-*` actions are allowed locally, then flagged for owner approval in CI (`W108`, unless an owner made the change). **GitHub enforces the approval** through CODEOWNERS and branch protection; capsules never contacts GitHub (B1), so it reports and GitHub blocks (D-016).
+5. A change not allowed by steps 1 to 3 is `E027`.
+
+### C5.3 Who made a commit (D-017)
+
+- A commit with a `Capsule-Agent` trailer is made by that agent. An agent name not listed under `agents` is not allowed to change anything (`E027`).
+- A commit without trailers is a human commit. The author's email identifies the human:
+  1. GitHub noreply addresses (`<id>+<handle>@users.noreply.github.com` or `<handle>@users.noreply.github.com`) map automatically to the human whose `github` is that handle (case-insensitive).
+  2. Otherwise, the human whose optional `emails` list contains the address (case-insensitive).
+  3. Otherwise the author is unknown and acts as `default`.
+- A human is an **owner** of capsule `X` if they are in `X`'s `owners` (or the nearest ancestor's), or one of their `owns` patterns matches `X`. Owners may do everything in capsules they own; other humans act as `default`.
 
 ## C6. The one rule (exact)
 
@@ -322,6 +340,7 @@ For each capsule `X` in a change unit:
 - **V1, code and its judge.** The unit touches implementation files whose home is `X`, or which a concern `K` covers. It also **modifies or deletes an existing check** that judges `X`: a check node in `X` or in `K`, a check linked by `checked-by` from `X`'s contracts, or an existing check file covered by `X`.
   - Adding new checks is not a violation (`one-rule.new-checks-with-code: allow`), but new checks are marked "unreviewed" until a human or a separate session confirms them.
 - **V2, rule and its reason.** The unit changes a contract or example in `X` and also changes an intent that contract `serves`.
+- V1 is reported as `E028` and V2 as `E029`.
 - **Solo mode never relaxes V1 or V2.**
 
 Message style:
@@ -341,6 +360,17 @@ error  One change touched both code and an existing check that judges it.
 - An existing `decision` node's hash must never change (`E009`).
 - To change a decision, add a new one that `supersedes` it.
 - Deleting a decision node is also `E009`.
+
+### C6.4 The base (D-018)
+
+`capsules check` compares against a base commit. Without `--base`:
+
+1. In GitHub Actions, the pull request's base, read from the local event file (`GITHUB_EVENT_PATH`; no network): its `base.sha` if that commit exists locally, otherwise `origin/<base.ref>`.
+2. Otherwise the remote's default branch (`origin/HEAD`, else `origin/main`).
+3. With no remote, the local `main` branch if it exists.
+4. Otherwise only uncommitted changes are checked.
+
+The base is the merge base of `HEAD` and that ref. Uncommitted changes are always checked too, as one more change unit. CI must check out full history (for example `fetch-depth: 0`) for 1 to work.
 
 ## C7. Hashes and the lockfile
 
@@ -405,6 +435,7 @@ The last field of a `link` record is the hash of the target **at the moment the 
   Capsule-Scope: billing.**
   ```
 - CI reads the trailers. **They can be forged**, so changes to protected layers also need owner approval on GitHub (CODEOWNERS plus branch protection). `capsules codeowners` prints the suggested lines.
+- **`Capsule-Cosmetic` owner check (D-013, D-016).** For every commit carrying `Capsule-Cosmetic: <address>`, the person who made it must own that capsule, or it is `E030`. In GitHub Actions, that person is the pull request's author, read from the local event file. Elsewhere, it is the commit author (C5.3). An address that names no node is `E003`.
 
 ## C9. Checks and weakened-test signals
 

@@ -1,6 +1,6 @@
 # Capsules
 
-> Status: early development (milestone M0). Not published yet.
+> Status: early development (milestone M3). Not published yet.
 
 Capsules is a free, open-source command-line tool that keeps a Git-stored, nested record of what each part of an AI-built app is meant to do. It shows that record to people and to agents, and it blocks AI agents from quietly breaking it.
 
@@ -20,6 +20,19 @@ Every rule, check and decision has a fingerprint, recorded in `.capsules/capsule
 > **`--cosmetic` is only for typos and formatting.** If the meaning changed, even slightly, don't use it. It clears every stale item at once without anyone reviewing them. Review each stale item and use `capsules refresh` instead.
 
 `capsules lock` records new fingerprints but never clears staleness, so running it can't hide a change by accident. Replaced decisions (ones another decision `supersedes`) are history, so they are skipped, with a one-line note.
+
+## The guard: `capsules check`
+
+`capsules check` compares your branch with its base (the pull request's base in GitHub Actions, otherwise `main`). It refuses a change when:
+
+- **One change edits code and also weakens an existing test that judges it** (`E028`). Adding _new_ tests alongside code is fine.
+- **One change edits a rule and the intent it serves** (`E029`).
+- **An existing decision is edited or deleted** instead of replaced (`E009`).
+- **An agent or person changes something `permissions.yaml` doesn't allow** (`E027`). Agents are named by the `Capsule-Agent:` commit trailer.
+
+It also warns when a test looks weakened (`W107`), and then runs the checks of the capsules your change affects. Trailers can be forged, so for real protection also require owner approval on GitHub (CODEOWNERS and branch protection). In CI, check out full history (`fetch-depth: 0`).
+
+Try it: `node scripts/demo-m3.mjs` (after `npm run build`).
 
 ## Develop
 

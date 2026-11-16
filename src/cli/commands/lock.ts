@@ -1,3 +1,4 @@
+import { ownersOf } from "../../core/identity.js";
 // `capsules lock`, `capsules refresh <address>`, `capsules relock --cosmetic <address>` (C7.3).
 import { writeFileSync } from "node:fs";
 import { join } from "node:path";
@@ -13,7 +14,7 @@ import {
   updateLock,
   type UpdateOptions,
 } from "../../core/lock.js";
-import { address, ancestorsOf } from "../../core/model.js";
+import { address } from "../../core/model.js";
 import { findProjectRoot, loadProject, UsageError, type Project } from "../../core/project.js";
 import { toJson } from "../../report/json.js";
 import { errors } from "../../report/messages.js";
@@ -85,7 +86,7 @@ function writeLock(
   if (write) writeFileSync(join(project.root, ...LOCK_FILE.split("/")), text);
 
   const trailer = command === "relock" ? `Capsule-Cosmetic: ${target}` : null;
-  const owners = target ? ownersOf(project, target.split("#")[0]!) : [];
+  const owners = target ? ownersOf(project.capsules, target.split("#")[0]!) : [];
 
   if (opts.json) {
     io.out(
@@ -153,11 +154,3 @@ function checkAddress(project: Project, addr: string): void {
 }
 
 /** Owners of a capsule: its own `owners`, else the nearest ancestor's (C2.1). */
-function ownersOf(project: Project, capsuleId: string): string[] {
-  const byId = new Map(project.capsules.map((c) => [c.id, c]));
-  for (const id of [capsuleId, ...ancestorsOf(capsuleId)]) {
-    const owners = byId.get(id)?.front?.owners;
-    if (owners) return owners;
-  }
-  return [];
-}

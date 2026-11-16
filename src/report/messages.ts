@@ -265,6 +265,101 @@ export const msg = {
       "the app's behaviour depends on this prompt, so the rules about it may need re-checking.",
       `Re-check ${linked.length ? linked.join(", ") : "the contracts this prompt serves"}, then run \`capsules lock\` to record the new version.`,
     ),
+  E009: (at: At, addr: string, how: "edited" | "deleted") =>
+    make(
+      "E009",
+      at,
+      `Decision ${addr} was ${how}. Decisions are append-only.`,
+      "a decision records why things are built this way; rewriting it erases the history that people and agents rely on.",
+      `Put ${addr} back as it was, and add a new decision that replaces it, e.g. "## decision D<n> supersedes @${addr.split("#")[1]}".`,
+    ),
+  E027: (
+    unit: string,
+    actor: string,
+    capsule: string,
+    action: string,
+    reason: string,
+    changed: string[],
+    unknownHuman: boolean,
+  ) =>
+    make(
+      "E027",
+      {},
+      `${unit}, by ${actor}: ${action} in ${capsule} is not allowed (${reason}).\n  changed: ${changed.join("\n           ")}`,
+      "permissions.yaml says who may change what, so an agent can't edit parts of the app it has no business touching.",
+      `Have someone allowed make this change (an owner of ${capsule}, or an agent whose role and scope include ${action}), or ask an owner to change permissions.yaml.` +
+        (unknownHuman
+          ? " If you are listed under humans in permissions.yaml, commit with your GitHub noreply address, or add this email to your `emails` list."
+          : ""),
+    ),
+  E028: (capsules: string[], unit: string, code: string[], checks: string[]) =>
+    make(
+      "E028",
+      {},
+      [
+        "One change touched both code and an existing check that judges it.",
+        `  ${capsules.length > 1 ? "capsules:" : "capsule:"} ${capsules.join(", ")}`,
+        `  change:  ${unit}`,
+        `  code:    ${code.join("\n           ")}`,
+        `  check:   ${checks.join("\n           ")}`,
+      ].join("\n"),
+      "an agent could make a test pass by weakening the test.",
+      "put the test change in its own commit from a separate session, and ask an owner to approve it.",
+    ),
+  E029: (capsule: string, unit: string, rules: string[], intents: string[]) =>
+    make(
+      "E029",
+      {},
+      [
+        "One change touched both a rule and the intent it serves.",
+        `  capsule: ${capsule}`,
+        `  change:  ${unit}`,
+        `  rule:    ${rules.join(", ")}`,
+        `  intent:  ${intents.join(", ")}`,
+      ].join("\n"),
+      "a rule can be made to fit by quietly rewriting the reason it exists, and no one would see the drift.",
+      "change the intent in its own commit and have an owner approve it, then change the rule in a separate commit.",
+    ),
+  E030: (commit: string, addr: string, who: string, owners: string[]) =>
+    make(
+      "E030",
+      {},
+      `${commit} carries "Capsule-Cosmetic: ${addr}", but ${who} doesn't own ${addr.split("#")[0]}.`,
+      "a cosmetic mark clears every stale link to a node without review, so only an owner may declare it.",
+      `Ask an owner of ${addr.split("#")[0]} (${owners.join(", ") || "none listed"}) to make that change, or remove the trailer and review each stale item with \`capsules refresh\`.`,
+    ),
+  E031: (at: At, addr: string, run: string, exit: string, output: string) =>
+    make(
+      "E031",
+      at,
+      `Check ${addr} failed (${exit}): ${run}${output ? `\n  output (last lines):\n${output}` : ""}`,
+      "this check proves a contract, so the contract may be broken.",
+      `Fix the code so the check passes. Run it yourself with: ${run}`,
+    ),
+  E032: (at: At, addr: string, run: string, seconds: number) =>
+    make(
+      "E032",
+      at,
+      `Check ${addr} timed out after ${seconds} seconds: ${run}`,
+      "a check that never finishes proves nothing, and can hide a hang in the code.",
+      "Make the check faster, or raise its limit with a `timeout:` field (seconds) or `checks.timeout-seconds` in config.yaml.",
+    ),
+  W107: (at: At, file: string, what: string) =>
+    make(
+      "W107",
+      at,
+      `Weakened-test signal in ${file}: ${what}.`,
+      "removing assertions, skipping tests or deleting a test can make broken code look green.",
+      "If this was intended, say why in the pull request and have an owner approve the test change. Otherwise restore the test.",
+    ),
+  W108: (unit: string, capsule: string, owners: string[], changed: string[]) =>
+    make(
+      "W108",
+      {},
+      `${unit} changes ${capsule}, which needs approval from an owner (${owners.join(", ") || "none listed"}).\n  changed: ${changed.join("\n           ")}`,
+      "intents, contracts and examples are what humans approve; an owner must see changes to them.",
+      `Make sure an owner of ${capsule} approves the pull request. GitHub enforces this through CODEOWNERS and branch protection (capsules never contacts GitHub).`,
+    ),
   W101: (file: string) =>
     make(
       "W101",
@@ -340,6 +435,9 @@ export const errors = {
     `"${addr}" is not an address.\n  fix: write <capsule>#<node>, for example billing.invoices#C1.`,
   unknownAddressArg: (addr: string) =>
     `There is no node ${addr}.\n  fix: check the spelling; \`capsules explain <file>\` lists the addresses in use.`,
+  badBase: (ref: string) =>
+    `--base ${ref} doesn't name a commit in this repository.
+  fix: use a branch, tag or commit that exists, e.g. --base main. If it only exists on the remote, run \`git fetch\` first.`,
   gitFailed: (args: string, stderr: string) =>
     `git ${args} failed: ${stderr.trim()}\n  fix: check that git is installed and the repository is not corrupted.`,
 };

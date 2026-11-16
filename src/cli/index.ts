@@ -2,7 +2,7 @@ import { Command, CommanderError } from "commander";
 import { UsageError } from "../core/project.js";
 import { GitError } from "../git/git.js";
 import { VERSION } from "../version.js";
-import { check } from "./commands/check.js";
+import { check, type CheckOptions } from "./commands/check.js";
 import { explain } from "./commands/explain.js";
 import { lock, refresh, relock } from "./commands/lock.js";
 import { status } from "./commands/status.js";
@@ -38,11 +38,14 @@ export function buildProgram(io: Io, setExit: (code: number) => void): Command {
   program
     .command("check")
     .description(
-      "validate every capsule (later milestones add locks, the one rule and running checks)",
+      "validate capsules and the lockfile, guard the changes since the base (permissions, the one rule, append-only decisions, weakened tests), then run the checks of affected capsules",
     )
-    .option("--no-run", "don't run check commands; validate only")
+    .option("--base <ref>", "compare against this branch or commit (default: see C6.4)")
+    .option("--all", "run every check, not only those of affected capsules")
+    .option("--no-run", "don't run check commands")
+    .option("--ci", "CI mode: exit code follows ci.mode in config.yaml (report or block)")
     .option("--json", "print JSON instead of text")
-    .action((opts: { run: boolean; json?: boolean }) => setExit(check(io, opts)));
+    .action(async (opts: CheckOptions) => setExit(await check(io, opts)));
 
   program
     .command("lock")

@@ -66,7 +66,7 @@ describe("billing demo (the M1 demo)", () => {
   it("status lists the orphan", () => {
     const r = run(dir, "status");
     expect(r.status).toBe(0);
-    expect(r.stdout).toContain("5 areas, 2 concerns");
+    expect(r.stdout).toContain("5 areas, 3 concerns");
     expect(r.stdout).toContain("  scripts/seed.js");
   });
 

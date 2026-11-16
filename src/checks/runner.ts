@@ -5,7 +5,8 @@ import { mkdirSync, writeFileSync } from "node:fs";
 import { join } from "node:path";
 import { membershipOf } from "../core/membership.js";
 import { address, ancestorsOf, type CapsuleNode } from "../core/model.js";
-import { capsuleFromPath, type Project } from "../core/project.js";
+import { capsuleFromPath } from "../core/judges.js";
+import type { Project } from "../core/project.js";
 import { msg, type Diagnostic } from "../report/messages.js";
 
 export interface CheckResult {

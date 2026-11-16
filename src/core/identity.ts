@@ -1,6 +1,6 @@
 // Who made a change, and who owns a capsule (C5.3, D-017).
 import { ancestorsOf, type Capsule } from "./model.js";
-import { capsuleMatches, type Permissions } from "./permissions.js";
+import { capsuleMatches, type Perms as Permissions } from "./access.js";
 
 export type Actor =
   | { kind: "agent"; name: string }

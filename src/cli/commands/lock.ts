@@ -20,6 +20,7 @@ import { toJson } from "../../report/json.js";
 import { errors } from "../../report/messages.js";
 import { formatDiagnostics, plural } from "../../report/text.js";
 import { EXIT } from "../exit-codes.js";
+import { addPendingCosmetic } from "../../hooks/session.js";
 import type { Io } from "../io.js";
 
 interface WriteOpts {
@@ -84,6 +85,8 @@ function writeLock(
   const changed = project.lockOnDisk === null || text !== serializeLock(project.lockOnDisk);
   const write = changed && !opts.dryRun;
   if (write) writeFileSync(join(project.root, ...LOCK_FILE.split("/")), text);
+  // The optional commit-msg hook adds the trailer to the next commit (C7.3).
+  if (command === "relock" && !opts.dryRun) addPendingCosmetic(project.root, target!);
 
   const trailer = command === "relock" ? `Capsule-Cosmetic: ${target}` : null;
   const owners = target ? ownersOf(project.capsules, target.split("#")[0]!) : [];
@@ -129,11 +132,11 @@ function writeLock(
   if (trailer) {
     lines.push(
       "",
-      "Add this line to your commit message:",
+      "Add this line to your commit message (the commit-msg hook adds it for you if installed):",
       "",
       `  ${trailer}`,
       "",
-      `Only an owner of ${target!.split("#")[0]} (${owners.length ? owners.join(", ") : "no owners set"}) may declare a change cosmetic. CI checks this from M3.`,
+      `Only an owner of ${target!.split("#")[0]} (${owners.length ? owners.join(", ") : "no owners set"}) may declare a change cosmetic. CI checks this.`,
     );
   }
   io.out(lines.join("\n") + "\n");

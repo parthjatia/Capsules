@@ -29,7 +29,8 @@ import { isIgnored } from "./membership.js";
 import { address, type Capsule, type CapsuleNode } from "./model.js";
 import { parseCapsuleFile } from "./parse.js";
 import { agentMay, type Action, type Verdict } from "./permissions.js";
-import { capsuleFromPath, type Project } from "./project.js";
+import { capsuleFromPath, checkJudges } from "./judges.js";
+import type { Project } from "./project.js";
 import { targetOf } from "./resolve.js";
 
 export interface GuardResult {
@@ -168,19 +169,6 @@ interface Violation {
   diagnostic: Diagnostic;
 }
 
-/** Which capsules each check node judges: its own, plus those whose rules are `checked-by` it. */
-function checkJudges(project: Project): Map<string, Set<string>> {
-  const judges = new Map<string, Set<string>>();
-  for (const c of project.capsules)
-    for (const n of c.nodes)
-      if (n.type === "check") judges.set(address(c.id, n.id), new Set([c.id]));
-  for (const c of project.capsules)
-    for (const n of c.nodes)
-      for (const l of n.links)
-        if (l.type === "checked-by") judges.get(targetOf(l.ref, c.id))?.add(c.id);
-  return judges;
-}
-
 function oneRule(
   project: Project,
   unit: ChangeUnit,
@@ -189,7 +177,7 @@ function oneRule(
 ): Violation[] {
   const blockNew = project.config["one-rule"]["new-checks-with-code"] === "block";
   const patterns = patternsOf(project.config);
-  const judges = checkJudges(project);
+  const judges = checkJudges(project.capsules);
   const checkNodes = project.capsules.flatMap((c) =>
     c.nodes
       .filter((n) => n.type === "check")

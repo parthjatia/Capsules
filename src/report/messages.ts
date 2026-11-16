@@ -438,6 +438,74 @@ export const errors = {
   badBase: (ref: string) =>
     `--base ${ref} doesn't name a commit in this repository.
   fix: use a branch, tag or commit that exists, e.g. --base main. If it only exists on the remote, run \`git fetch\` first.`,
+  workNeedsPattern: () =>
+    "capsules work needs the capsules to work on, e.g. `capsules work billing.invoices` or `capsules work 'billing.**'`.\n  fix: name a capsule or pattern, or use `capsules work --end` to end the current session.",
+  workUnknownAgent: (agent: string, known: string[]) =>
+    `${agent} is not listed under agents in .capsules/permissions.yaml.\n  fix: use one of: ${known.join(", ")}.`,
+  workNoCapsule: (pattern: string, ids: string[]) =>
+    `"${pattern}" matches no capsule.\n  fix: use one of: ${ids.join(", ")} (patterns like billing.** work too).`,
   gitFailed: (args: string, stderr: string) =>
     `git ${args} failed: ${stderr.trim()}\n  fix: check that git is installed and the repository is not corrupted.`,
+};
+
+/** Compiled agent files (C10). */
+export const compileMsg = {
+  E011: (file: string, how: "differs" | "missing" | "extra") =>
+    make(
+      "E011",
+      { file },
+      how === "missing"
+        ? `Generated agent file ${file} is missing.`
+        : how === "extra"
+          ? `Generated agent file ${file} belongs to no capsule any more.`
+          : `Generated agent file ${file} is out of date.`,
+      "agents read these files to learn the rules; an out-of-date file teaches them old rules.",
+      "Run `capsules compile` and commit the result. Never edit generated files by hand.",
+    ),
+};
+
+/** Messages the hooks print (C11). Claude reads a block reason as the reason it can't proceed. */
+export const hookMsg = {
+  blocked: (code: string, what: string, lines: [string, string][], why: string, fix: string) =>
+    [
+      `capsules blocked this change (${code}): ${what}`,
+      ...lines.map(([k, v]) => `  ${(k + ":").padEnd(9)}${v}`),
+      `  why:     ${why}`,
+      `  fix:     ${fix}`,
+    ].join("\n") + "\n",
+  notAllowedWhy:
+    "permissions.yaml says who may change what, so an agent can't change parts it has no business touching.",
+  notAllowedFix: (action: string) =>
+    action === "change-checks"
+      ? "leave existing tests as they are and fix the code instead. If the test itself is wrong, say so and stop: a human, or the test-maintainer agent in its own session, can change it."
+      : action === "edit-config" || action === "edit-permissions"
+        ? "don't change this file; ask a human owner to make the change."
+        : `ask a human owner, or an agent whose role and scope include ${action}, to make this change.`,
+  v1Why: "an agent could make a test pass by weakening the test.",
+  v1Fix:
+    "don't change the test in this session. Fix the code so the existing test passes. If the test is wrong, say so: the test-maintainer agent can change it in a separate session, with owner approval.",
+  v2Why:
+    "a rule can be made to fit by quietly rewriting the reason it exists, and no one would see the drift.",
+  v2Fix:
+    "change the intent and the rule in separate sessions, and have an owner approve the intent change.",
+  decisionWhy:
+    "a decision records why things are built this way; rewriting it erases the history people and agents rely on.",
+  decisionFix: (addr: string) =>
+    `leave ${addr} as it is and add a new decision that supersedes it, e.g. "## decision D<n> supersedes @${addr.split("#")[1]}".`,
+  generatedWhy: "this file is generated from .capsules/, so hand edits would be overwritten.",
+  generatedFix: "change the capsule in .capsules/ instead, then run `capsules compile`.",
+  toolFileWhy: "only capsules' own commands write this file, so its fingerprints can be trusted.",
+  toolFileFix:
+    "use `capsules lock`, `capsules refresh <address>` or `capsules relock --cosmetic <address>` instead.",
+  bashWhy:
+    "capsules can only check edits made with the Edit and Write tools; shell writes to protected files skip those checks.",
+  bashFix:
+    "make the change with the Edit or Write tool so capsules can check it, or ask a human to make it.",
+  approval: (what: string) =>
+    `capsules: ${what}. An owner must approve this change in the pull request (W108).`,
+  crashed: (detail: string, open: boolean) =>
+    `capsules hook failed: ${detail}\n` +
+    (open
+      ? "The change was allowed (hooks.on-error: open). This is a bug in capsules; CI still checks the change.\n"
+      : "The change was blocked (hooks.on-error: closed). This is a bug in capsules; set hooks.on-error to open to continue.\n"),
 };

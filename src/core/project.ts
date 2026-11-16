@@ -18,6 +18,7 @@ import { computeMembership, type MembershipResult } from "./membership.js";
 import { address, type Capsule, type CapsuleKind } from "./model.js";
 import { parseCapsuleFile } from "./parse.js";
 import { parsePermissions, type Permissions } from "./permissions.js";
+export { capsuleFromPath } from "./judges.js";
 import { targetOf, validateGraph } from "./resolve.js";
 import { gitToplevel, hashObjects, lsFiles } from "../git/git.js";
 import { errors, msg, type Diagnostic } from "../report/messages.js";
@@ -127,19 +128,6 @@ function discover(root: string, diagnostics: Diagnostic[]): FoundFile[] {
       diagnostics.push(msg.E012({ file: f.file, line: 1 }, f.id, topAreas.get(f.id)!));
   }
   return found;
-}
-
-/** The capsule a `.capsules/` path defines (C1), or null if it isn't a capsule file. */
-export function capsuleFromPath(path: string): { id: string; kind: CapsuleKind } | null {
-  if (!path.startsWith(".capsules/") || !path.endsWith(".md")) return null;
-  const parts = path.slice(".capsules/".length, -".md".length).split("/");
-  if (parts[0] === "_concerns")
-    return parts.length === 2 && ID_PART.test(parts[1]!)
-      ? { id: parts[1]!, kind: "concern" }
-      : null;
-  if (parts.some((p) => !ID_PART.test(p))) return null;
-  if (parts[0] === "root") return parts.length === 1 ? { id: "root", kind: "area" } : null;
-  return { id: parts.join("."), kind: "area" };
 }
 
 function readOptional(path: string): string | null {

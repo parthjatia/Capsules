@@ -1,0 +1,117 @@
+# The Capsules GitHub Action (C17, F3): runs `capsules check --ci` on a pull request and
+# posts its summary as one sticky comment, updated on every push. The summary is computed by
+# capsules from the diff and the check results; this action only installs capsules and posts
+# the text (capsules itself never makes network requests, B1).
+#
+# Use it in a workflow with:
+#   permissions: { contents: read, pull-requests: write }
+#   steps:
+#     - uses: actions/checkout@v5
+#       with: { fetch-depth: 0 }      # capsules compares against the pull request's base
+#     - uses: actions/setup-node@v5
+#       with: { node-version: 22 }
+#     - uses: parthjatia/Capsules/action@v0.1
+name: Capsules
+description: Guard a pull request with capsules and post one sticky summary comment.
+
+inputs:
+  install:
+    description: >-
+      How to get capsules: `npm` installs the published package; `source` builds it from this
+      action's own repository (for use before publishing, or to test the action itself).
+    default: npm
+  version:
+    description: The npm version or range to install when `install` is `npm`.
+    default: "0.1"
+  args:
+    description: Extra arguments for `capsules check`, for example `--no-run`.
+    default: ""
+  working-directory:
+    description: The folder to run in (the one that contains .capsules/, or below it).
+    default: "."
+  comment:
+    description: "Post the summary on the pull request (needs `pull-requests: write`)."
+    default: "true"
+  token:
+    description: The token used to post the comment.
+    default: ${{ github.token }}
+
+outputs:
+  exit-code:
+    description: The exit code of `capsules check --ci` (0 unless ci.mode is block and there are errors).
+    value: ${{ steps.check.outputs.exit-code }}
+
+runs:
+  using: composite
+  steps:
+    - name: Install capsules
+      shell: bash
+      env:
+        INSTALL: ${{ inputs.install }}
+        VERSION: ${{ inputs.version }}
+      run: |
+        set -euo pipefail
+        case "$INSTALL" in
+          npm)
+            npm install -g --no-audit --no-fund "@pyscoparth/capsules@$VERSION"
+            ;;
+          source)
+            cd "$GITHUB_ACTION_PATH/.."
+            npm ci --no-audit --no-fund
+            npm run -s build
+            npm install -g --no-audit --no-fund .
+            ;;
+          *)
+            echo "::error::The install input must be npm or source, not \"$INSTALL\"."
+            exit 1
+            ;;
+        esac
+        echo "capsules $(capsules --version)"
+
+    - name: capsules check
+      id: check
+      shell: bash
+      working-directory: ${{ inputs.working-directory }}
+      env:
+        ARGS: ${{ inputs.args }}
+      run: |
+        set +e
+        summary="$RUNNER_TEMP/capsules-summary.md"
+        # shellcheck disable=SC2086 # ARGS is a list of flags
+        capsules check --ci --summary "$summary" $ARGS
+        code=$?
+        echo "exit-code=$code" >> "$GITHUB_OUTPUT"
+        echo "summary=$summary" >> "$GITHUB_OUTPUT"
+        if [ -f "$summary" ]; then cat "$summary" >> "$GITHUB_STEP_SUMMARY"; fi
+        exit 0
+
+    - name: Post the summary on the pull request
+      if: github.event_name == 'pull_request' && inputs.comment == 'true'
+      # A pull request from a fork gets a read-only token: report in the job summary instead.
+      continue-on-error: true
+      shell: bash
+      env:
+        GH_TOKEN: ${{ inputs.token }}
+        PR: ${{ github.event.pull_request.number }}
+        SUMMARY: ${{ steps.check.outputs.summary }}
+      run: |
+        set -euo pipefail
+        if [ ! -f "$SUMMARY" ]; then
+          echo "No summary was written; nothing to post."
+          exit 0
+        fi
+        id=$(gh api "repos/$GITHUB_REPOSITORY/issues/$PR/comments" --paginate \
+          --jq '.[] | select(.body | startswith("<!-- capsules-summary -->")) | .id' | head -n 1)
+        if [ -n "$id" ]; then
+          gh api -X PATCH "repos/$GITHUB_REPOSITORY/issues/comments/$id" -F body=@"$SUMMARY" > /dev/null
+          echo "Updated the capsules comment."
+        else
+          gh api -X POST "repos/$GITHUB_REPOSITORY/issues/$PR/comments" -F body=@"$SUMMARY" > /dev/null
+          echo "Posted the capsules comment."
+        fi
+
+    - name: Result
+      shell: bash
+      env:
+        CODE: ${{ steps.check.outputs.exit-code }}
+      run: exit "${CODE:-70}"

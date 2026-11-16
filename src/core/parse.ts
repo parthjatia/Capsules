@@ -116,8 +116,10 @@ export function parseCapsuleFile(
 
   // Front matter.
   let front: FrontMatter | null = null;
+  let frontText: string | null = null;
   const first = tree.children[0];
   if (first?.type === "yaml" && first.position?.start.line === 1) {
+    frontText = first.value;
     front = readFront(first.value, file, kind, diagnostics);
   } else {
     diagnostics.push(
@@ -151,7 +153,7 @@ export function parseCapsuleFile(
   });
 
   return {
-    capsule: { id, kind, file, front, nodes, parent: parentOf(id, kind) },
+    capsule: { id, kind, file, front, frontText, nodes, parent: parentOf(id, kind) },
     diagnostics,
   };
 }

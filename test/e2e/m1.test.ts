@@ -102,10 +102,11 @@ describe("billing demo (the M1 demo)", () => {
 
 const ROOT_MD = `${FM("Root")}## intent I1\nx\n`;
 
+/** Diagnostic codes from `check --no-run`, ignoring E010 (no lockfile), which M2 tests cover. */
 function codesOf(dir: string): string[] {
-  return JSON.parse(run(dir, "check", "--no-run", "--json").stdout).diagnostics.map(
-    (d: { code: string }) => d.code,
-  );
+  return JSON.parse(run(dir, "check", "--no-run", "--json").stdout)
+    .diagnostics.map((d: { code: string }) => d.code)
+    .filter((c: string) => c !== "E010");
 }
 
 describe("check --no-run validation (C2.6)", () => {
@@ -198,7 +199,9 @@ describe("check --no-run validation (C2.6)", () => {
     });
     const r = JSON.parse(run(dir, "check", "--no-run", "--json").stdout);
     const byCode = Object.fromEntries(
-      r.diagnostics.map((d: { code: string; message: string }) => [d.code, d.message]),
+      r.diagnostics
+        .filter((d: { code: string }) => d.code !== "E010")
+        .map((d: { code: string; message: string }) => [d.code, d.message]),
     );
     expect(Object.keys(byCode).sort()).toEqual(["E020", "E021", "E022"]);
     expect(byCode.E021).toContain('Owner "nobody" is not listed');
@@ -211,6 +214,7 @@ describe("check --no-run validation (C2.6)", () => {
       ".capsules/root.md": `${FM("Root", ["**"])}## assumption A1\nx\nreview-by: 2026-01-01\n\n## code c\nsrc/gone.ts#f\n`,
       "a.ts": "",
     });
+    expect(run(dir, "lock").status).toBe(0);
     const r = run(dir, "check", "--no-run", "--json");
     expect(r.status).toBe(0);
     expect(codesOf(dir)).toEqual(["W105", "W106"]);
@@ -221,6 +225,7 @@ describe("check --no-run validation (C2.6)", () => {
       ".capsules/root.md": `${FM("Root", ["**"], "status: draft\n")}## contract C1 serves @I9\ny\n`,
       "a.ts": "",
     });
+    expect(run(dir, "lock").status).toBe(0);
     const r = run(dir, "check", "--no-run", "--json");
     expect(r.status).toBe(0);
     const j = JSON.parse(r.stdout);

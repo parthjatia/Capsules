@@ -80,6 +80,8 @@ export interface Capsule {
   file: string;
   /** null if the front matter was missing or invalid (an E008 was reported). */
   front: FrontMatter | null;
+  /** The raw front matter YAML (between the `---` lines), for the capsule hash; null if absent. */
+  frontText: string | null;
   nodes: CapsuleNode[];
   /** Parent area id; null for `root` and for concerns. */
   parent: string | null;

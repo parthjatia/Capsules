@@ -133,6 +133,12 @@ export function validateGraph(capsules: Capsule[], opts: ValidateOptions): Diagn
           out.push(msg.W105({ file: cap.file, line: review.line }, addr, review.value));
         }
       }
+      if (node.type === "prompt") {
+        const f = node.fields.find((x) => x.key === "file");
+        if (f && f.value && !existsSync(join(opts.projectRoot, f.value))) {
+          out.push(msg.W109({ file: cap.file, line: f.line }, addr, f.value));
+        }
+      }
       if (node.type === "code") {
         const bodyLines = node.body.split("\n");
         bodyLines.forEach((line, i) => {

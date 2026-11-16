@@ -13,6 +13,7 @@ function cap(
     kind,
     file: `.capsules/${kind === "concern" ? "_concerns/" : ""}${id.replace(/\./g, "/")}.md`,
     front: { title: id, owners: null, covers, excludes: opts.excludes ?? [], status: "active" },
+    frontText: null,
     nodes: [],
     parent: null,
   };

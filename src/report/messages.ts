@@ -223,6 +223,48 @@ export const msg = {
       "every area capsule nests under root, so without it the tree has no top.",
       'Create .capsules/root.md with front matter, e.g. "---\\ntitle: My app\\n---", and an intent describing the whole product.',
     ),
+  E010: (changes: string[], more: number, missing: boolean) =>
+    make(
+      "E010",
+      { file: ".capsules/capsules.lock" },
+      missing
+        ? "There is no lockfile yet (.capsules/capsules.lock)."
+        : `The lockfile is out of date: ${changes.join("; ")}${more ? `; and ${more} more` : ""}.`,
+      "the lockfile records each rule's fingerprint, which is how capsules notices when something that others depend on has changed.",
+      "Run `capsules lock` and commit .capsules/capsules.lock. (`lock` never hides staleness: links stay flagged until someone reviews them.)",
+    ),
+  E026: (at: At, line: string) =>
+    make(
+      "E026",
+      at,
+      `This lockfile line can't be read: "${line.trim()}".`,
+      "the lockfile is written by capsules; a damaged line means pinned fingerprints may be lost.",
+      "Undo the hand edit (e.g. `git checkout .capsules/capsules.lock`), or delete the file and run `capsules lock`. Deleting it re-pins every link, which clears all staleness, so review stale links first.",
+    ),
+  W104: (at: At, from: string, linkType: string, to: string, pinned: string, now: string) =>
+    make(
+      "W104",
+      at,
+      `Stale link: ${from} ${linkType} ${to}, but ${to} has changed since this link was confirmed (${pinned} -> ${now}).`,
+      `${from} was written against an older version of ${to}, so it may no longer be right.`,
+      `Review ${from}. If it still holds, run \`capsules refresh ${from}\`. If the change to ${to} was only cosmetic (a typo), an owner runs \`capsules relock --cosmetic ${to}\`.`,
+    ),
+  W109: (at: At, addr: string, path: string) =>
+    make(
+      "W109",
+      at,
+      `Prompt node ${addr} points to ${path}, which does not exist.`,
+      "capsules can't track changes to a prompt file it can't find.",
+      "Fix the `file:` path, or remove the prompt node if the prompt was deleted.",
+    ),
+  W110: (at: At, addr: string, path: string, linked: string[]) =>
+    make(
+      "W110",
+      at,
+      `Stale prompt: ${path} (prompt node ${addr}) changed since it was locked.`,
+      "the app's behaviour depends on this prompt, so the rules about it may need re-checking.",
+      `Re-check ${linked.length ? linked.join(", ") : "the contracts this prompt serves"}, then run \`capsules lock\` to record the new version.`,
+    ),
   W101: (file: string) =>
     make(
       "W101",
@@ -290,6 +332,14 @@ export const errors = {
     `No .capsules/ folder found in ${cwd} or any parent folder up to the Git repository root.\n  fix: run capsules from your project, or create .capsules/ (\`capsules init\` arrives in M4).`,
   outsideProject: (path: string, root: string) =>
     `${path} is outside the project at ${root}.\n  fix: pass a path inside the project.`,
+  relockNeedsCosmetic: () =>
+    "relock only declares a change cosmetic, so it needs --cosmetic.\n  fix: run `capsules relock --cosmetic <address>`, e.g. `capsules relock --cosmetic billing#C1`. To re-pin links after reviewing them, use `capsules refresh <address>`.",
+  crossRepoArg: (addr: string, repo: string) =>
+    `E015  ${addr} is a cross-repo address (repo "${repo}"). Cross-repo links are not supported yet in v0.1.\n  fix: use an address in this repo, like billing#C1.`,
+  badAddressArg: (addr: string) =>
+    `"${addr}" is not an address.\n  fix: write <capsule>#<node>, for example billing.invoices#C1.`,
+  unknownAddressArg: (addr: string) =>
+    `There is no node ${addr}.\n  fix: check the spelling; \`capsules explain <file>\` lists the addresses in use.`,
   gitFailed: (args: string, stderr: string) =>
     `git ${args} failed: ${stderr.trim()}\n  fix: check that git is installed and the repository is not corrupted.`,
 };

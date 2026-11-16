@@ -52,6 +52,9 @@ jobs:
       - name: demo app tests (must pass unchanged)
         working-directory: examples/billing-demo
         run: npm test
+      - name: demo capsules and lockfile are valid and up to date
+        working-directory: examples/billing-demo
+        run: node ../../dist/cli.js check --no-run
       - name: npx . --version
         shell: bash
         run: |

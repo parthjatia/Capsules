@@ -293,7 +293,7 @@ agents:                            # names match Claude Code sub-agent names whe
 | `edit-context` | `context` nodes |
 | `add-decisions` | New `decision` and `assumption` nodes. Existing decisions are immutable for everyone |
 | `propose-intent`, `propose-contracts`, `propose-examples` | Change those nodes. CI then requires owner approval (warning in solo mode) |
-| `edit-permissions`, `edit-config` | Humans only |
+| `edit-permissions`, `edit-config` | Humans only. `edit-config` covers `.capsules/config.yaml` and CI workflows (`.github/workflows/**`), so an agent can't switch the guard off (D-020) |
 | (none) | Generated agent files: only `capsules compile` writes them |
 | (none) | Tool-written files `capsules.lock` and `installed.json`: only the tool's own commands write them (`lock`, `refresh`, `relock`, `init`, `remove`). Hooks block direct edits. `refresh` of links **from** an intent, contract or example needs the same approval as editing that node (`propose-*`); `relock --cosmetic` is owners only |
 
@@ -304,6 +304,7 @@ Owners may do everything in capsules they own. Humans who aren't owners act as `
 Input: file `F`, actor `A` (agent name or human), and its role `R`, `capsules` patterns `S` and `blocked-by` list `B`.
 
 1. **Classify the change:**
+   - `F` is `.capsules/config.yaml` or under `.github/workflows/` → `edit-config`, owners only, even though `.github/**` is in `ignore` (D-020). `F` is `.capsules/permissions.yaml` → `edit-permissions`.
    - `F` matches `checks.files` or a check's `files`, and existed at the base → existing check (`change-checks`, or `add-checks` if purely additive).
    - `F` is new and a check file → `add-checks`.
    - `F` is under `.capsules/` → parse before and after, diff the nodes, and map each changed node to its action. Front matter changes need `propose-contracts`.

@@ -167,9 +167,9 @@ Newest at the bottom. Entries are never edited, only superseded by a later entry
   4. Otherwise uncommitted changes only.
      The base is the merge base with `HEAD`. Uncommitted changes are always one extra change unit.
 
-## D-019: M3 codes and interpretations (for review)
+## D-019: M3 codes and interpretations
 
-- **Date:** 2026-11-16 · **Status:** added under the D-011 rule. Flagged in the M3 PR for review.
+- **Date:** 2026-11-16 · **Approved by:** Parth, apart from point 8, which D-020 replaces.
 - **Codes:**
   - `E027` not allowed by permissions
   - `E028` one rule V1
@@ -185,7 +185,15 @@ Newest at the bottom. Entries are never edited, only superseded by a later entry
   5. **Uncommitted changes** are made by the person in `git config user.email` (the author of the next commit), mapped as in C5.3. Sessions (M4) will take precedence.
   6. **No history yet:** in a repo with no commits there is nothing to compare against, so the history-based checks (permissions, one rule, E009, W107) are skipped. Validation still runs.
   7. **V2 needs an existing intent:** adding a new intent together with the contracts that serve it is how a capsule is born, so only a **modified or deleted** intent counts. The contract or example may be added, changed or removed.
-  8. **Ignored files** (`config.ignore`, for example `.github/**` and `docs/**`) are outside the guard, because they need no capsule. Known gap: an agent editing `.github/workflows/` is not caught by capsules. CODEOWNERS is the backstop.
+  8. ~~**Ignored files** are outside the guard.~~ Replaced by D-020: ignored files need no capsule and are not code, but CI workflows and `.capsules/config.yaml` are `edit-config` (owners only).
   9. **Affected capsules** (C9.1) also include a capsule whose own file changed, so changing a check node runs it.
   10. **Merge commits** are skipped (`git log --no-merges`); their content belongs to the commits they merge.
   11. **Merged findings:** when the same code and check break the one rule for several capsules (for example an area and a concern), one `E028` names all of them.
+
+## D-020: CI workflows are protected like config.yaml
+
+- **Date:** 2026-11-16 · **Approved by:** Parth
+- **Changes:** C5.1, C5.2 step 1
+- **Decision:** a change to `.github/workflows/**` or `.capsules/config.yaml` is `edit-config`, which only owners may do (no role grants it by default). An agent's commit, or a commit by someone who isn't an owner, is `E027`. Other ignored files (for example `docs/**`) stay outside the guard.
+- **Why:** an agent that can edit the CI workflow can switch the guard off, for example by deleting the `capsules check` step.
+- **On this repo:** workflow changes go in their own commit, for an owner to approve in the PR review.

@@ -67,7 +67,9 @@
 - **`check` options:** `--base`, `--all`, `--no-run`, `--ci` (exit code follows `ci.mode`) and `--json`.
 - **Demo script:** `node scripts/demo-m3.mjs`.
 - **CI** checks out full history, so the dogfood step guards this repo's own pull requests.
-- **Tests:** 171 (unit and end-to-end), including F1 scenarios 1, 2, 5 and 6.
+- **CI workflows** (`.github/workflows/**`) and `.capsules/config.yaml` are owners only (D-020).
+- **Windows CI** prints the time of every test, to spot the stall seen once during development.
+- **Tests:** 176 (unit and end-to-end), including F1 scenarios 1, 2, 5 and 6.
 
 ## Speed measurements (M1, as asked in D-006)
 
@@ -97,6 +99,7 @@ Options for the hook (Parth chose option 1, see D-010):
   - The commands, the judge and drafter sub-agents, and the skill.
   - `verdict`, `init`, `remove`, `doctor` and `installed.json`.
   - The `commit-msg` hook that adds `Capsule-Cosmetic` and session trailers.
+  - Make this repo's root capsule `active` instead of `draft`, so capsules guards its own repo with errors, not warnings.
   - Before starting: verify the hook facts in the official Claude Code docs and cite them.
 
 ## How to demo M3
@@ -135,13 +138,11 @@ You should see the checkout page's home (`web`), parents (`root`), concerns (`pa
 - Node 22+, and CI tests Node 22 and 24; macOS runs only for main (D-009).
 - Front matter fingerprint uses RFC 8785 (D-012); `relock --cosmetic` prints the trailer (D-013).
 - New codes E026, W109, W110 approved (D-014); replaced decisions are skipped in stale reports, with one summary line (D-015).
-- Approvals are enforced by GitHub; the cosmetic owner check reads the event file (D-016). Commit identity via noreply addresses and optional `emails` (D-017). Default base (D-018).
+- Approvals are enforced by GitHub; the cosmetic owner check reads the event file (D-016). Commit identity via noreply addresses and optional `emails` (D-017). Default base (D-018). D-019 approved; CI workflows protected (D-020). This repo now commits with the GitHub noreply address.
 
 ## Open questions for Parth
 
-1. **D-019** (M3 codes E027 to E032 and eleven interpretations of the spec): OK? See docs/DECISIONS.md.
-2. **Your commit email.** Your commits use your personal email, which `permissions.yaml` doesn't list, so capsules treats those commits as an unknown author acting as `default`. To be recognised as owner without publishing your email, set this repo's Git email to your GitHub noreply address. Or add your email to `emails` (it becomes public if the repo goes public). Until then, this repo's own check shows warnings for your commits; it only warns because the root capsule is a draft.
-3. The remaining I4 questions: whether `init` installs the commit-msg hook by default, which concerns the design partners care about most, and Cursor support beyond compiled rules.
+1. The remaining I4 questions: whether `init` installs the commit-msg hook by default, which concerns the design partners care about most, and Cursor support beyond compiled rules.
 
 ## Notes
 

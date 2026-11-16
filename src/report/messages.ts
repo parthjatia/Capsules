@@ -438,6 +438,26 @@ export const errors = {
   badBase: (ref: string) =>
     `--base ${ref} doesn't name a commit in this repository.
   fix: use a branch, tag or commit that exists, e.g. --base main. If it only exists on the remote, run \`git fetch\` first.`,
+  contextFor: (v: string) =>
+    `--for must be builder or judge, not "${v}".\n  fix: use --for builder (the default) or --for judge.`,
+  contextBudget: (v: string) =>
+    `--budget must be a whole number of tokens, not "${v}".\n  fix: e.g. --budget 4000 (about 16,000 characters).`,
+  contextNeedsTarget: () =>
+    "capsules context needs a capsule or a file, e.g. `capsules context billing.invoices` or `capsules context src/web/checkout.tsx`.\n  fix: name one, or use --for judge to get the judge's input for the whole change.",
+  contextUnknown: (t: string, ids: string[]) =>
+    `"${t}" is neither a capsule nor a file in this project.\n  fix: use a file path, or one of: ${ids.join(", ")}.`,
+  verdictUnreadable: (f: string, why: string) =>
+    `Can't read the verdict file ${f}: ${why}\n  fix: pass a file holding the judge's JSON, e.g. capsules verdict record --file .capsules/_cache/verdict.json.`,
+  verdictInvalid: (f: string, issues: string[]) =>
+    `The verdict in ${f} doesn't match the verdict format (C13):\n${issues.map((i) => `    ${i}`).join("\n")}\n  fix: ask the judge again; it must answer with only the JSON from its instructions.`,
+  verdictNoCommit: (c: string) =>
+    `"${c}" doesn't name a commit in this repository.\n  fix: use a commit that exists, e.g. HEAD.`,
+  verdictUnknownContracts: (a: string[]) =>
+    `The verdict names rules that don't exist here: ${a.join(", ")}.\n  fix: judge only the contracts listed by \`capsules context --for judge\`.`,
+  badAgentKind: (a: string, known: string[]) =>
+    `"${a}" is not an agent capsules knows.\n  fix: use one or more of: ${known.join(", ")}, separated by commas.`,
+  initNeedsConfirm: () =>
+    "Nothing was changed. This isn't an interactive terminal, so capsules can't ask.\n  fix: read the plan above, then run the same command with --yes.",
   workNeedsPattern: () =>
     "capsules work needs the capsules to work on, e.g. `capsules work billing.invoices` or `capsules work 'billing.**'`.\n  fix: name a capsule or pattern, or use `capsules work --end` to end the current session.",
   workUnknownAgent: (agent: string, known: string[]) =>

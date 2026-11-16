@@ -71,7 +71,7 @@
 - **Windows CI** prints the time of every test, to spot the stall seen once during development.
 - **Tests:** 176 (unit and end-to-end), including F1 scenarios 1, 2, 5 and 6.
 
-### M4a: Agent rules, hooks and sessions (in review, waiting for Parth's go)
+### M4a: Agent rules, hooks and sessions (merged, PR #6)
 
 - **`capsules compile [--check] [--dry-run]`** (`src/compile/`, C10):
   - Writes `.claude/rules/capsules-overview.md` (always loaded) and one `capsules-<id>.md` per capsule with `covers`, scoped by `paths:`.
@@ -90,6 +90,17 @@
 - **CI** (D-022): a final `ci-ok` job; on pull requests, a macOS job that never got a runner doesn't count as a failure. CI also prints hook timings on every OS (report only).
 - **Docs checked** (D-024): Claude Code [hooks](https://code.claude.com/docs/en/hooks) and [rules](https://code.claude.com/docs/en/memory), and [Cursor rules](https://cursor.com/docs/context/rules).
 - **Tests:** 226 (unit and end-to-end), including F1 scenario 4.
+
+### M4b: Install, remove, doctor, context and verdicts (in review, waiting for Parth's go)
+
+- **`capsules init`** shows a plan of every file it will create or change and asks first (`--yes` to skip asking, `--dry-run` to only look). It creates a starter `.capsules/` (a draft root capsule, so nothing blocks yet) if there is none, the Claude Code commands (`/capsules-draft`, `/capsules-work`, `/capsules-judge`), the judge and drafter sub-agents, the skill, and the compiled rules. It merges the hooks into `.claude/settings.local.json`, keeping your own settings, and keeps that file out of Git (D-026). `--git-hooks` adds the commit-msg hook, `--workflow` adds `.github/workflows/capsules.yml`. It never overwrites a file it didn't create.
+- **`capsules remove`** undoes all of it, byte for byte; `--all` also deletes `.capsules/`. Tested: init, doctor, remove leaves the repo identical (F1 scenario 8).
+- **`capsules doctor`** lists every file capsules touched, confirms none is app code, `package.json`, a lockfile or a build output, then runs `build.command` and `build.test`.
+- **Agents can't switch their guard off:** `.claude/settings.json` and `.claude/settings.local.json` are `edit-config`, humans only, in `pre-edit`, `pre-bash` and CI (D-026).
+- **`capsules context <capsule|file>`** (C16): warnings, the capsule, inherited rules, concerns, children, siblings and linked decisions, nearest first. `--budget <tokens>` shrinks the far parts first. `--for judge` adds the diff and the contracts to judge.
+- **`capsules verdict record --file <f>`** checks the judge's JSON (C13) and stores it as a Git note under `refs/notes/capsules`; **`verdict show`** prints it. Advice only.
+- **`capsules codeowners`** prints suggested CODEOWNERS lines.
+- Docs checked: [sub-agents](https://code.claude.com/docs/en/sub-agents), [slash commands](https://code.claude.com/docs/en/slash-commands), [skills](https://code.claude.com/docs/en/skills), [settings](https://code.claude.com/docs/en/settings) (D-026).
 
 ## Speed measurements (M1, as asked in D-006)
 
@@ -125,7 +136,16 @@ Node itself takes about 69 ms to start on this machine. CI prints the same numbe
 
 ## Next
 
-- **M4b:** `init`, `remove`, `doctor` and `installed.json` (merging our hooks into `.claude/settings.json`), the optional commit-msg Git hook (`--git-hooks`), `capsules context`, the commands, the judge and drafter sub-agents, the skill, and `verdict`.
+- **M5:** the map (`capsules map` in HTML, Mermaid and JSON), and `/capsules-map`.
+
+## How to demo M4b
+
+```sh
+npm run build
+node scripts/demo-m4b.mjs
+```
+
+You should see: (1) the plan `init` shows before it changes anything, (2) `init --yes` finishing with the next steps, (3) `doctor` saying "your app is unaffected by capsules", (4) an agent's edit to `.claude/settings.local.json` BLOCKED with exit code 2, and (5) after `remove --all`, "The repo is exactly as before."
 
 ## How to demo M4a
 
@@ -188,7 +208,7 @@ You should see the checkout page's home (`web`), parents (`root`), concerns (`pa
 ## Open questions for Parth
 
 1. Which concerns the design partners care about most (auth, payments, PII). These become the demo's concern capsules.
-2. To make `ci-ok` the one required check, add it under branch protection for `main` (Settings > Branches). Until then nothing is required, so this is optional.
+2. When this repo becomes public, make `ci-ok` a required check for `main` (D-025).
 
 ## Notes
 

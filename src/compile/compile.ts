@@ -252,7 +252,7 @@ const GENERATED_DIRS: [string, RegExp][] = [
   [".cursor/rules", /^capsules-.+\.mdc$/],
 ];
 
-function generatedOnDisk(root: string): string[] {
+export function generatedOnDisk(root: string): string[] {
   const out: string[] = [];
   for (const [dir, re] of GENERATED_DIRS) {
     const abs = join(root, ...dir.split("/"));

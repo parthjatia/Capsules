@@ -1,0 +1,20 @@
+format: 0.1
+solo: true
+humans:
+  # emails: optional. If this repo is public, every email listed here is public too.
+  {{owner}}: { {{github}}owns: ["**"], emails: [] }
+roles:
+  builder:
+    may: [edit-code, add-checks, edit-context, add-decisions]
+  drafter:
+    may: [edit-context, add-decisions, add-checks,
+          propose-intent, propose-contracts, propose-examples]
+  judge:
+    may: [read]
+  maintainer:                      # changes existing tests, never app code
+    may: [add-checks, propose-checks]
+agents:
+  default:          { role: builder, capsules: ["**"] }
+  capsules-judge:   { role: judge,   capsules: ["**"] }
+  capsules-drafter: { role: drafter, capsules: ["**"] }
+  test-maintainer:  { role: maintainer, capsules: ["**"] }   # run it in its own session

@@ -241,3 +241,27 @@ Newest at the bottom. Entries are never edited, only superseded by a later entry
   1. In a hook, an existing check is a check file that exists on disk and wasn't created earlier in the same session.
   2. Writes through Bash to protected paths (`.capsules/`, existing check files, generated files, CI workflows) are blocked for every agent, with a pointer to the Edit and Write tools, which capsules can check precisely.
   3. A hook records an allowed edit when it allows it. If the tool call is then rejected, the session remembers a change that didn't happen, which can only make the hook stricter.
+
+## D-025: Private repos on GitHub Free can't block merges
+
+- **Date:** 2026-11-16 · **Approved by:** Parth
+- **Changes:** C8, README (known limits)
+- **Decision:** branch protection and required CODEOWNERS reviews aren't available for private repositories on GitHub Free. There, GitHub can't require checks or owner approvals, so capsules reports problems in CI but can't block merges; the agent hooks still block live. When this repo becomes public, make `ci-ok` a required check on `main`.
+- **Also decided:** Claude does its own work on this repo inside a capsules session (`capsules work … --agent default`), so its commits carry `Capsule-*` trailers and the guard treats that work as an agent's, not Parth's.
+
+## D-026: Hooks go in settings.local.json for now; agents may not edit Claude Code settings
+
+- **Date:** 2026-11-16 · **Approved by:** Parth
+- **Changes:** C5.1, C5.2, C11, C15 (`init`)
+- **Decision:**
+  1. `init` merges our hooks into `.claude/settings.local.json`, pointing at the capsules that ran `init` on this machine. Each person runs `init` once; CI stays the shared gate. `init` adds the file to `.git/info/exclude`, because Claude Code only keeps it out of Git when Claude Code creates it ([settings docs](https://code.claude.com/docs/en/settings)).
+  2. `.claude/settings.json` and `.claude/settings.local.json` are `edit-config`, humans only, in the hooks (`pre-edit`, `pre-bash`) and in CI, so an agent can't remove its own guard.
+  3. After we publish: `init --shared` writes the hooks into the committed `.claude/settings.json`, calling a globally installed `capsules` (`npm install -g @pyscoparth/capsules`). Not `npx`, which would add 0.2 to 0.4 s to every edit.
+- **Docs checked (2026-11-16):** [sub-agents](https://code.claude.com/docs/en/sub-agents) (`.claude/agents/`, `name`, `description`, `tools` as a comma-separated string; hooks get `name` as `agent_type`), [slash commands](https://code.claude.com/docs/en/slash-commands) (`.claude/commands/*.md` still works; skills are preferred for new work), [skills](https://code.claude.com/docs/en/skills) (`.claude/skills/<name>/SKILL.md`, `description` recommended), [settings](https://code.claude.com/docs/en/settings) (`settings.local.json` is per machine, hooks reload live, lists merge across files).
+- **Interpretations:**
+  1. The C12 command files stay in `.claude/commands/` as the spec says; they still work. Moving them to skills is a later option.
+  2. `.capsules/installed.json` is committed and holds nothing machine-specific: each file `init` created (with its Git blob hash, so `remove` can tell whether you changed it), the folders it created, which agent files it generated, and whether it created `AGENTS.md`. What is per machine (the settings file's bytes before the merge, the `.git/info/exclude` line, the commit-msg hook) is recorded in `.capsules/_cache/installed-local.json`. If that cache is lost, `remove` still finds our hooks by their command and takes them out. `remove` puts a merged file back byte for byte when nothing else changed in it.
+  3. `init` never overwrites a file it didn't create: an existing `.git/hooks/commit-msg` or workflow file is left alone and reported.
+  4. `/capsules-map` waits for M5, when `capsules map` exists.
+  5. `capsules context --for judge` works without a target: it lists the contracts that apply to every changed file, plus the diff. The context pack's warnings come first (C16 lists them last in the table, but says "warnings first").
+  6. When `init` can't find a GitHub noreply address in the Git settings, it says that the owner's commits won't be recognised yet, and how to fix it (C5.3). It never writes an email into `permissions.yaml`.

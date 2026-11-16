@@ -297,7 +297,7 @@ agents:                            # names match Claude Code sub-agent names whe
 | `edit-context` | `context` nodes |
 | `add-decisions` | New `decision` and `assumption` nodes. Existing decisions are immutable for everyone |
 | `propose-intent`, `propose-contracts`, `propose-examples` | Change those nodes. CI then requires owner approval (warning in solo mode) |
-| `edit-permissions`, `edit-config` | Humans only. `edit-config` covers `.capsules/config.yaml` and CI workflows (`.github/workflows/**`), so an agent can't switch the guard off (D-020) |
+| `edit-permissions`, `edit-config` | Humans only. `edit-config` covers `.capsules/config.yaml`, CI workflows (`.github/workflows/**`) and Claude Code's project settings (`.claude/settings.json`, `.claude/settings.local.json`), so an agent can't switch the guard off (D-020, D-026) |
 | (none) | Generated agent files: only `capsules compile` writes them |
 | (none) | Tool-written files `capsules.lock` and `installed.json`: only the tool's own commands write them (`lock`, `refresh`, `relock`, `init`, `remove`). Hooks block direct edits. `refresh` of links **from** an intent, contract or example needs the same approval as editing that node (`propose-*`); `relock --cosmetic` is owners only |
 
@@ -308,7 +308,7 @@ Owners may do everything in capsules they own. Humans who aren't owners act as `
 Input: file `F`, actor `A` (agent name or human), and its role `R`, `capsules` patterns `S` and `blocked-by` list `B`.
 
 1. **Classify the change:**
-   - `F` is `.capsules/config.yaml` or under `.github/workflows/` → `edit-config`, owners only, even though `.github/**` is in `ignore` (D-020). `F` is `.capsules/permissions.yaml` → `edit-permissions`.
+   - `F` is `.capsules/config.yaml`, under `.github/workflows/`, or `.claude/settings.json` or `.claude/settings.local.json` → `edit-config`, owners only, even though `.github/**` and `.claude/**` are in `ignore` (D-020, D-026). `F` is `.capsules/permissions.yaml` → `edit-permissions`.
    - `F` matches `checks.files` or a check's `files`, and existed at the base → existing check (`change-checks`, or `add-checks` if purely additive).
    - `F` is new and a check file → `add-checks`.
    - `F` is under `.capsules/` → parse before and after, diff the nodes, and map each changed node to its action. Front matter changes need `propose-contracts`.
@@ -440,6 +440,7 @@ The last field of a `link` record is the hash of the target **at the moment the 
   Capsule-Scope: billing.**
   ```
 - CI reads the trailers. **They can be forged**, so changes to protected layers also need owner approval on GitHub (CODEOWNERS plus branch protection). `capsules codeowners` prints the suggested lines.
+- **Private repos on GitHub Free (D-025).** Branch protection and required CODEOWNERS reviews aren't available there, so GitHub can't require checks or owner approvals. Capsules still reports every problem in CI, but it can't block a merge. The agent hooks still block live. Once a repo is public (or on a paid plan), make the CI summary job (`ci-ok` in this repo) a required check.
 - **`Capsule-Cosmetic` owner check (D-013, D-016).** For every commit carrying `Capsule-Cosmetic: <address>`, the person who made it must own that capsule, or it is `E030`. In GitHub Actions, that person is the pull request's author, read from the local event file. Elsewhere, it is the commit author (C5.3). An address that names no node is `E003`.
 
 ## C9. Checks and weakened-test signals
@@ -493,7 +494,7 @@ If a file would exceed `rules.max-chars`, the far content (ancestors) shrinks to
 
 ## C11. Agent hooks (Claude Code first)
 
-Installed by merging into `.claude/settings.json`. **Never overwrite** the user's settings: keep their hooks, add ours, and record exactly what we added in `installed.json`.
+Installed by merging into `.claude/settings.local.json` (D-026): Claude Code's per-machine project settings, kept out of Git. The hook commands point at the capsules that ran `init` on this machine, so they stay fast; each person runs `init` once, and CI is the shared gate. Because `init` creates that file itself, it also lists it in `.git/info/exclude` (Claude Code only does this for files it creates). **Never overwrite** the user's settings: keep their hooks, add ours, and record exactly what we added in `installed.json`. Once capsules is published, `init --shared` will offer shared hooks in `.claude/settings.json` that call a globally installed `capsules` (`npm install -g`), not `npx`, so hooks stay fast. Both settings files are `edit-config`: the hooks block agent edits to them, so an agent can't remove its own guard.
 
 | Event and matcher | Command | Behaviour |
 | --- | --- | --- |
@@ -560,7 +561,7 @@ Exit codes: `0` OK · `1` problems found (errors, failing checks, violations) ·
 
 | Command | What it does |
 | --- | --- |
-| `capsules init [--agents …] [--yes] [--git-hooks] [--workflow]` | Shows a plan of every file it will create or change, asks to confirm, then creates `.capsules/`, compiles agent files, merges hooks, and installs commands and agents. Optionally adds the commit-msg hook and `.github/workflows/capsules.yml`. Writes `installed.json` |
+| `capsules init [--agents …] [--yes] [--git-hooks] [--workflow]` | Shows a plan of every file it will create or change, asks to confirm, then creates `.capsules/` (keeping one that exists), compiles agent files, merges hooks into `.claude/settings.local.json` (C11), and installs commands, sub-agents and the skill. Optionally adds the commit-msg hook and `.github/workflows/capsules.yml`. Writes `installed.json` |
 | `capsules check [--base <ref>] [--all] [--no-run] [--ci] [--json]` | Validate → lock up to date → compiled files up to date → permissions and the one rule on the diff → append-only decisions → weakened-test signals → run checks for affected capsules |
 | `capsules status` | Stale links, stale prompts, orphans, unreviewed checks, assumptions past review, last check results |
 | `capsules explain <file>` | Home, parents, concerns, rules, checks, who may edit, related decisions |

@@ -6,7 +6,7 @@ import { join } from "node:path";
 import { git } from "./git.js";
 
 /** Run git, returning stdout or null on failure (for "does this exist?" questions). */
-function tryGit(args: string[], cwd: string): string | null {
+export function tryGit(args: string[], cwd: string): string | null {
   const r = spawnSync("git", ["-c", "core.quotepath=off", ...args], {
     cwd,
     encoding: "utf8",

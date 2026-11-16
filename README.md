@@ -1,6 +1,6 @@
 # Capsules
 
-> Status: early development (milestone M4a). Not published yet.
+> Status: early development (milestone M4b). Not published yet.
 
 Capsules is a free, open-source command-line tool that keeps a Git-stored, nested record of what each part of an AI-built app is meant to do. It shows that record to people and to agents, and it blocks AI agents from quietly breaking it.
 
@@ -47,6 +47,27 @@ Claude Code hooks then check every edit as it happens:
 A blocked edit comes back to the agent with the reason and the fix. Hooks can be bypassed on your machine, so CI (`capsules check`) stays the real gate. `capsules work <capsules> --agent <name>` limits a session to some capsules and labels its commits.
 
 Try it: `node scripts/demo-m4a.mjs` (after `npm run build`).
+
+## Install and remove
+
+```sh
+capsules init            # shows every file it will create or change, then asks
+capsules doctor          # proves your app builds and tests exactly as before
+capsules remove          # undoes everything init did (--all also deletes .capsules/)
+```
+
+`init` adds a starter `.capsules/`, the Claude Code commands `/capsules-draft`, `/capsules-work` and `/capsules-judge`, a read-only judge sub-agent, a drafter sub-agent and a skill, and merges the hooks into `.claude/settings.local.json` (your settings are kept, and the file stays out of Git). It never touches app code, `package.json` or build settings.
+
+Other commands:
+
+- `capsules context <capsule or file>` prints what an agent should know before working there: the rules, inherited rules, concerns and rejected options. `--budget 4000` keeps it short.
+- `capsules context --for judge` gives the judge the diff and the contracts to judge. `capsules verdict record --file verdict.json` stores its verdicts as Git notes; `capsules verdict show` prints them. Verdicts are advice; they never block.
+- `capsules codeowners` prints suggested CODEOWNERS lines.
+
+## Known limits
+
+- **Private repos on GitHub Free can't block merges.** Branch protection and required owner reviews (CODEOWNERS) aren't available there, so GitHub can't require checks or approvals. Capsules still reports every problem in CI, and the agent hooks still block bad edits as they happen, but a merge can go ahead anyway. On a public repo, or a paid plan, make the CI summary job a required check.
+- **Commit trailers can be forged**, and hooks can be bypassed on your own machine. CI, plus owner approval where GitHub supports it, is the real gate.
 
 ## Develop
 

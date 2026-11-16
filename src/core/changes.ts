@@ -19,6 +19,7 @@ import type { Capsule, CapsuleNode, NodeType } from "./model.js";
 import { parseCapsuleFile } from "./parse.js";
 import type { Action } from "./permissions.js";
 import { capsuleFromPath, checkFileMatcher as matcherFor } from "./judges.js";
+import { settingsAction } from "./access.js";
 import type { Project } from "./project.js";
 
 export interface UnitFile {
@@ -258,12 +259,8 @@ export function classify(
     return { ...base, kind: "tool", capsule: "root" };
   // CI workflows are settings too, even though `.github/**` is ignored: an agent that can
   // edit them can switch the guard off (D-020).
-  if (
-    f.path === ".capsules/config.yaml" ||
-    f.path === ".capsules/permissions.yaml" ||
-    f.path.startsWith(".github/workflows/")
-  ) {
-    const action: Action = f.path.endsWith("permissions.yaml") ? "edit-permissions" : "edit-config";
+  const action = settingsAction(f.path);
+  if (action) {
     return { ...base, kind: "settings", capsule: "root", actions: [{ action, detail: f.path }] };
   }
   const cap = capsuleFromPath(f.path);

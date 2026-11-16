@@ -3,6 +3,7 @@
 // and CI workflows. Anything else is allowed; CI is the real gate (B13).
 import { existsSync } from "node:fs";
 import { isAbsolute, relative, resolve, sep } from "node:path";
+import { settingsAction } from "../core/access.js";
 import { checkFileMatcher } from "../core/judges.js";
 import { isGeneratedPath } from "../compile/paths.js";
 import { hookMsg } from "../report/messages.js";
@@ -94,11 +95,13 @@ export function preBash(input: HookInput, root: string, index: HookIndex): HookR
           ? "a capsules file"
           : p.startsWith(".github/workflows")
             ? "a CI workflow"
-            : isGeneratedPath(p)
-              ? "a generated agent file"
-              : isCheck(p) && existsSync(abs)
-                ? "an existing check"
-                : null;
+            : p === ".claude" || settingsAction(p)
+              ? "Claude Code's settings, which hold the hooks"
+              : isGeneratedPath(p)
+                ? "a generated agent file"
+                : isCheck(p) && existsSync(abs)
+                  ? "an existing check"
+                  : null;
       if (protectedWhy)
         return {
           kind: "block",

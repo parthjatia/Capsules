@@ -4,7 +4,11 @@ import { GitError } from "../git/git.js";
 import { VERSION } from "../version.js";
 import { runHook } from "../hooks/main.js";
 import { check, type CheckOptions } from "./commands/check.js";
+import { codeowners } from "./commands/codeowners.js";
 import { compile } from "./commands/compile.js";
+import { context, type ContextOptions } from "./commands/context.js";
+import { doctorCmd, init, remove } from "./commands/install.js";
+import { verdictRecord, verdictShow } from "./commands/verdict.js";
 import { work } from "./commands/work.js";
 import { explain } from "./commands/explain.js";
 import { lock, refresh, relock } from "./commands/lock.js";
@@ -101,6 +105,87 @@ export function buildProgram(io: Io, setExit: (code: number) => void): Command {
       (pattern: string | undefined, opts: { agent?: string; end?: boolean; json?: boolean }) =>
         setExit(work(io, pattern, opts)),
     );
+
+  program
+    .command("init")
+    .description(
+      "set up capsules here: shows every file it will create or change, asks, then creates .capsules/, the agent files and the hooks",
+    )
+    .option(
+      "--agents <list>",
+      "comma-separated: claude-code, cursor, agents-md (default: claude-code)",
+    )
+    .option("--git-hooks", "also add a commit-msg Git hook that adds Capsule-* trailers")
+    .option("--workflow", "also add .github/workflows/capsules.yml")
+    .option("--yes", "don't ask; apply the plan")
+    .option("--dry-run", "show the plan without changing anything")
+    .option("--json", "print JSON instead of text")
+    .action(
+      async (opts: {
+        agents?: string;
+        gitHooks?: boolean;
+        workflow?: boolean;
+        yes?: boolean;
+        dryRun?: boolean;
+        json?: boolean;
+      }) => setExit(await init(io, opts)),
+    );
+
+  program
+    .command("remove")
+    .description("undo everything capsules init installed; leaves .capsules/ unless --all")
+    .option("--all", "also delete .capsules/ (every capsule and the lockfile)")
+    .option("--yes", "don't ask; remove")
+    .option("--dry-run", "show what would be removed without changing anything")
+    .option("--json", "print JSON instead of text")
+    .action(async (opts: { all?: boolean; yes?: boolean; dryRun?: boolean; json?: boolean }) =>
+      setExit(await remove(io, opts)),
+    );
+
+  program
+    .command("doctor")
+    .description(
+      "prove capsules doesn't affect the app: list every file it touched, then run the app's build and tests",
+    )
+    .option("--no-run", "don't run the build and test commands")
+    .option("--json", "print JSON instead of text")
+    .action(async (opts: { run: boolean; json?: boolean }) => setExit(await doctorCmd(io, opts)));
+
+  program
+    .command("context")
+    .description("print what an agent needs before working on a capsule or file (C16)")
+    .argument("[target]", "a capsule id or a file path")
+    .option("--budget <tokens>", "shrink the far parts to fit about this many tokens")
+    .option("--for <who>", "builder (default) or judge (adds the diff and the rules to judge)")
+    .option("--base <ref>", "with --for judge: compare against this branch or commit")
+    .option("--json", "print JSON instead of text")
+    .action((target: string | undefined, opts: ContextOptions) =>
+      setExit(context(io, target, opts)),
+    );
+
+  const verdict = program
+    .command("verdict")
+    .description("record or show judge verdicts (advice only)");
+  verdict
+    .command("record")
+    .description("check a judge's verdict JSON and store it as a Git note on the commit")
+    .requiredOption("--file <file>", "the verdict JSON")
+    .option("--json", "print JSON instead of text")
+    .action((opts: { file: string; json?: boolean }) => setExit(verdictRecord(io, opts)));
+  verdict
+    .command("show")
+    .description("print the verdicts stored on a commit")
+    .argument("[commit]", "the commit (default: HEAD)")
+    .option("--json", "print JSON instead of text")
+    .action((commit: string | undefined, opts: { json?: boolean }) =>
+      setExit(verdictShow(io, commit, opts)),
+    );
+
+  program
+    .command("codeowners")
+    .description("print suggested CODEOWNERS lines for capsules, settings and check files")
+    .option("--json", "print JSON instead of text")
+    .action((opts: { json?: boolean }) => setExit(codeowners(io, opts)));
 
   program
     .command("hook")

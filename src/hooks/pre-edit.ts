@@ -3,7 +3,7 @@
 import { existsSync, readFileSync } from "node:fs";
 import { isAbsolute, relative, resolve, sep } from "node:path";
 import picomatch from "picomatch";
-import { agentMay, type Action } from "../core/access.js";
+import { agentMay, settingsAction, type Action } from "../core/access.js";
 import {
   capsuleFromPath,
   capsulesJudgedByFile,
@@ -267,12 +267,9 @@ export async function preEdit(
   const t = readTracking(root, actor.trackKey);
 
   let facts: EditFacts | null;
-  if (
-    path === ".capsules/config.yaml" ||
-    path === ".capsules/permissions.yaml" ||
-    path.startsWith(".github/workflows/")
-  ) {
-    const action: Action = path.endsWith("permissions.yaml") ? "edit-permissions" : "edit-config";
+  const settings = settingsAction(path);
+  if (settings) {
+    const action: Action = settings;
     facts = {
       capsule: "root",
       concerns: [],

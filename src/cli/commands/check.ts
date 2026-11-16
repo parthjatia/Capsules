@@ -6,7 +6,10 @@ import { guard } from "../../core/guard.js";
 import { actorLabel } from "../../core/identity.js";
 import { skippedLine, splitReplaced, staleLinks } from "../../core/lock.js";
 import { findProjectRoot, loadProject, sortDiagnostics } from "../../core/project.js";
+import { writeFileSync } from "node:fs";
+import { resolve } from "node:path";
 import { toJson } from "../../report/json.js";
+import { prSummary } from "../../report/summary.js";
 import { countBySeverity, formatDiagnostics, plural, rows } from "../../report/text.js";
 import { EXIT } from "../exit-codes.js";
 import type { Io } from "../io.js";
@@ -17,6 +20,8 @@ export interface CheckOptions {
   all?: boolean;
   ci?: boolean;
   json?: boolean;
+  /** Also write the pull request summary (C17) as Markdown to this file. */
+  summary?: string;
 }
 
 // C15 order: validate, lock, compiled files, permissions and the one rule on the diff,
@@ -49,6 +54,17 @@ export async function check(io: Io, opts: CheckOptions): Promise<number> {
   const skipped = project.lockOnDisk
     ? splitReplaced(staleLinks(project.lockOnDisk, project.current), project.capsules).skipped
     : [];
+  if (opts.summary)
+    writeFileSync(
+      resolve(io.cwd, opts.summary),
+      prSummary(project, {
+        base,
+        changedPaths: g.changedPaths,
+        diagnostics,
+        checksRun: opts.run,
+        results,
+      }),
+    );
   const passed = results.filter((r) => r.status === "pass").length;
   const failed = results.length - passed;
 

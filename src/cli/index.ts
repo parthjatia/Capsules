@@ -52,6 +52,7 @@ export function buildProgram(io: Io, setExit: (code: number) => void): Command {
     .option("--all", "run every check, not only those of affected capsules")
     .option("--no-run", "don't run check commands")
     .option("--ci", "CI mode: exit code follows ci.mode in config.yaml (report or block)")
+    .option("--summary <file>", "also write the pull request summary (Markdown) to this file")
     .option("--json", "print JSON instead of text")
     .action(async (opts: CheckOptions) => setExit(await check(io, opts)));
 

@@ -42,7 +42,7 @@
   - `check` reports `E010` (lock out of date), `W104` (stale link; an error with `stale-links: block`), `W109` (prompt file missing), `W110` (stale prompt) and `E026` (unreadable lockfile).
 - **Safety:** `lock` refuses to write while capsules have errors, or when the lockfile can't be read, so pins are never lost silently.
 - **Lockfiles** are committed for this repo and the demo. CI fails if either goes out of date.
-- **Tests:** 126 (unit and end-to-end), including F1 scenario 3 and the determinism checks.
+- **Tests:** 127 (unit and end-to-end), including F1 scenario 3 and the determinism checks.
 
 ## Speed measurements (M1, as asked in D-006)
 
@@ -77,7 +77,7 @@ In `examples/billing-demo`, change the wording of invoice contract C1 in `.capsu
 node ../../dist/cli.js status
 ```
 
-You should see `lock: out of date`, then 5 stale links: everything that points to `billing.invoices#C1`. Undo the edit (`git checkout .capsules/billing/invoices.md`) and status is clean again.
+You should see `lock: out of date`, then 4 stale links: everything that points to `billing.invoices#C1`, plus one line saying replaced decision D3 was skipped (D-015). Undo the edit (`git checkout .capsules/billing/invoices.md`) and status is clean again.
 
 ## How to demo M1
 
@@ -94,12 +94,11 @@ You should see the checkout page's home (`web`), parents (`root`), concerns (`pa
 - Hook speed: option 1, with targets of 150 ms on macOS/Linux and 300 ms on Windows; measure again in M4 (D-010).
 - Node 22+, and CI tests Node 22 and 24; macOS runs only for main (D-009).
 - Front matter fingerprint uses RFC 8785 (D-012); `relock --cosmetic` prints the trailer (D-013).
+- New codes E026, W109, W110 approved (D-014); replaced decisions are skipped in stale reports, with one summary line (D-015).
 
 ## Open questions for Parth
 
-1. **D-014** (new codes E026, W109, W110, added under your D-011 rule): OK?
-2. **Superseded decisions show up as stale.** In the M2 demo, D3, which D7 replaced, is listed as stale along with the others. It is technically true, but it's history, not something to review. Should links from superseded decisions be left out of stale reports? I recommend yes. It would add one sentence to C7.4.
-3. The remaining I4 questions: whether `init` installs the commit-msg hook by default, which concerns the design partners care about most, and Cursor support beyond compiled rules.
+1. The remaining I4 questions: whether `init` installs the commit-msg hook by default, which concerns the design partners care about most, and Cursor support beyond compiled rules.
 
 ## Notes
 

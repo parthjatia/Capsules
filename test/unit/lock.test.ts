@@ -4,6 +4,8 @@ import {
   LOCK_HEADER,
   lockChanges,
   parseLock,
+  skippedLine,
+  splitReplaced,
   serializeLock,
   staleLinks,
   stalePrompts,
@@ -168,6 +170,40 @@ describe("staleness and out-of-date lock (C7.4)", () => {
       { kind: "file", key: "billing.invoices#agent", change: "changed" },
     ]);
     expect(lockChanges(old, old)).toEqual([]);
+  });
+});
+
+describe("replaced decisions are skipped (D-015)", () => {
+  const text = `---
+title: T
+---
+
+## intent I1
+x
+
+## contract C1 serves @I1
+old
+
+## decision D3 serves @C1
+old way
+
+## decision D7 serves @C1 supersedes @D3
+new way
+`;
+  const caps = [parseCapsuleFile(text, ".capsules/root.md", "root", "area").capsule];
+  const changed = [
+    parseCapsuleFile(text.replace("\nold\n", "\nnew\n"), ".capsules/root.md", "root", "area")
+      .capsule,
+  ];
+  const stale = staleLinks(computeCurrent(caps, new Map()), computeCurrent(changed, new Map()));
+
+  it("reports links from current decisions only, and names the skipped ones", () => {
+    const { report, skipped } = splitReplaced(stale, changed);
+    expect(stale.map((s) => s.from)).toEqual(["root#D3", "root#D7"]);
+    expect(report.map((s) => s.from)).toEqual(["root#D7"]);
+    expect(skipped).toEqual([{ decision: "root#D3", replacedBy: ["root#D7"] }]);
+    expect(skippedLine(skipped)).toBe("1 replaced decision skipped (root#D3, replaced by root#D7)");
+    expect(skippedLine([])).toBeNull();
   });
 });
 

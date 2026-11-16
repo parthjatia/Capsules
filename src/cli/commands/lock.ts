@@ -7,6 +7,8 @@ import {
   LOCK_FILE,
   lockChanges,
   serializeLock,
+  skippedLine,
+  splitReplaced,
   staleLinks,
   updateLock,
   type UpdateOptions,
@@ -73,7 +75,10 @@ function writeLock(
     })
     .map((l) => `${l.from} ${l.type} ${l.to}`)
     .sort();
-  const stillStale = staleLinks(next, project.current);
+  const { report: stillStale, skipped } = splitReplaced(
+    staleLinks(next, project.current),
+    project.capsules,
+  );
   const text = serializeLock(next);
   const changed = project.lockOnDisk === null || text !== serializeLock(project.lockOnDisk);
   const write = changed && !opts.dryRun;
@@ -91,6 +96,7 @@ function writeLock(
         changes,
         repinned,
         stillStale: stillStale.map((s) => `${s.from} ${s.type} ${s.to}`),
+        skippedReplaced: skipped,
         ...(trailer ? { trailer, owners } : {}),
       }),
     );
@@ -117,6 +123,8 @@ function writeLock(
       `${plural(stillStale.length, "link")} still stale. \`capsules lock\` never clears staleness; review them with \`capsules status\`.`,
     );
   }
+  const skippedText = skippedLine(skipped);
+  if (skippedText) lines.push(skippedText + ".");
   if (trailer) {
     lines.push(
       "",

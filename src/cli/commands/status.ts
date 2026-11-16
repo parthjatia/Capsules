@@ -1,5 +1,11 @@
 import { shortestPrefixes } from "../../core/hash.js";
-import { lockChanges, staleLinks, stalePrompts } from "../../core/lock.js";
+import {
+  lockChanges,
+  skippedLine,
+  splitReplaced,
+  staleLinks,
+  stalePrompts,
+} from "../../core/lock.js";
 import { findProjectRoot, loadProject } from "../../core/project.js";
 import { toJson } from "../../report/json.js";
 import { countBySeverity, plural, rows } from "../../report/text.js";
@@ -21,7 +27,10 @@ export function status(io: Io, opts: { json?: boolean }): number {
   const unreadable = project.diagnostics.some((d) => d.code === "E026");
   const disk = project.lockOnDisk;
   const changes = disk ? lockChanges(disk, project.current) : [];
-  const stale = disk ? staleLinks(disk, project.current) : [];
+  const { report: stale, skipped } = splitReplaced(
+    disk ? staleLinks(disk, project.current) : [],
+    project.capsules,
+  );
   const prompts = disk ? stalePrompts(disk, project.current) : [];
   const lockState = unreadable
     ? "unreadable"
@@ -58,6 +67,7 @@ export function status(io: Io, opts: { json?: boolean }): number {
           pinned: s.hash,
           current: s.current,
         })),
+        skippedReplaced: skipped,
         stalePrompts: prompts,
         orphans,
         conflicts,
@@ -113,6 +123,8 @@ export function status(io: Io, opts: { json?: boolean }): number {
       ].join("\n"),
     );
   }
+  const skippedText = skippedLine(skipped);
+  if (skippedText) parts.push(skippedText + ".");
   if (prompts.length) {
     parts.push(
       `changed prompts (W110): re-check the rules about them, then run \`capsules lock\`\n${prompts.map((p) => `  ${p.path} (${p.address})`).join("\n")}`,

@@ -216,3 +216,46 @@ export function stalePrompts(onDisk: Lock, current: Lock): StalePrompt[] {
   }
   return out.sort((a, b) => byCodeUnits(a.address, b.address));
 }
+
+export interface SkippedReplaced {
+  /** The replaced decision. */
+  decision: string;
+  /** The decision(s) that supersede it. */
+  replacedBy: string[];
+}
+
+/**
+ * C7.4 (D-015): links from a replaced decision are history, not something to review.
+ * Splits stale links into those to report and the replaced decisions that were skipped.
+ */
+export function splitReplaced(
+  stale: StaleLink[],
+  capsules: Capsule[],
+): { report: StaleLink[]; skipped: SkippedReplaced[] } {
+  const replacedBy = new Map<string, string[]>();
+  for (const c of capsules)
+    for (const n of c.nodes)
+      for (const l of n.links)
+        if (l.type === "supersedes") {
+          const target = targetOf(l.ref, c.id);
+          replacedBy.set(target, [...(replacedBy.get(target) ?? []), address(c.id, n.id)].sort());
+        }
+  const report = stale.filter((s) => !replacedBy.has(s.from));
+  const skippedIds = [
+    ...new Set(stale.filter((s) => replacedBy.has(s.from)).map((s) => s.from)),
+  ].sort(byCodeUnits);
+  return {
+    report,
+    skipped: skippedIds.map((d) => ({ decision: d, replacedBy: replacedBy.get(d)! })),
+  };
+}
+
+/** The summary line for skipped replaced decisions, or null if none (D-015). */
+export function skippedLine(skipped: SkippedReplaced[]): string | null {
+  if (!skipped.length) return null;
+  const n = skipped.length;
+  const list = skipped
+    .map((s) => `${s.decision}, replaced by ${s.replacedBy.join(" and ")}`)
+    .join("; ");
+  return `${n} replaced decision${n === 1 ? "" : "s"} skipped (${list})`;
+}

@@ -22,8 +22,8 @@ const json = (dir: string, ...args: string[]) => JSON.parse(run(dir, ...args, "-
 const staleFrom = (dir: string) =>
   json(dir, "status").staleLinks.map((s: { from: string }) => s.from);
 
+// D3 also links to C1, but D7 replaced it, so it is skipped (D-015).
 const DEPENDENTS_OF_C1 = [
-  "billing.invoices#D3",
   "billing.invoices#D7",
   "billing.invoices#E1",
   "billing.invoices#create-invoice",
@@ -44,7 +44,14 @@ describe("the M2 demo: change a contract, see what is stale", () => {
     expect(s.lock).toEqual({ state: "out-of-date", changes: ["node billing.invoices#C1 changed"] });
     expect(staleFrom(dir)).toEqual(DEPENDENTS_OF_C1);
     const text = run(dir, "status").stdout;
-    expect(text).toContain("stale:     5 links, 0 prompts");
+    expect(text).toContain("stale:     4 links, 0 prompts");
+    expect(text).toContain(
+      "\n1 replaced decision skipped (billing.invoices#D3, replaced by billing.invoices#D7).\n",
+    );
+    expect(text).not.toContain("billing.invoices#D3 serves");
+    expect(s.skippedReplaced).toEqual([
+      { decision: "billing.invoices#D3", replacedBy: ["billing.invoices#D7"] },
+    ]);
     expect(text).toContain("billing.invoices#D7 serves billing.invoices#C1");
 
     const check = run(dir, "check", "--no-run");
@@ -55,6 +62,10 @@ describe("the M2 demo: change a contract, see what is stale", () => {
     expect(check.stdout).toContain(
       "warning W104  Stale link: billing.invoices#D7 serves billing.invoices#C1",
     );
+    expect(check.stdout).not.toContain("Stale link: billing.invoices#D3");
+    expect(check.stdout).toContain(
+      "note: 1 replaced decision skipped (billing.invoices#D3, replaced by billing.invoices#D7).",
+    );
   });
 
   it("`lock` updates records but never clears staleness (B12)", () => {
@@ -62,7 +73,10 @@ describe("the M2 demo: change a contract, see what is stale", () => {
     edit(dir, INVOICES, C1_OLD, C1_NEW);
     const r = run(dir, "lock");
     expect(r.status).toBe(0);
-    expect(r.stdout).toContain("5 links still stale");
+    expect(r.stdout).toContain("4 links still stale");
+    expect(r.stdout).toContain(
+      "1 replaced decision skipped (billing.invoices#D3, replaced by billing.invoices#D7).",
+    );
     expect(json(dir, "status").lock.state).toBe("up-to-date");
     expect(staleFrom(dir)).toEqual(DEPENDENTS_OF_C1);
     expect(run(dir, "check", "--no-run").status).toBe(0); // stale links are warnings by default

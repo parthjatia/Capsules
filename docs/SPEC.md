@@ -388,7 +388,7 @@ The last field of a `link` record is the hash of the target **at the moment the 
 
 ### C7.4 Staleness
 
-- **Stale link:** the pinned hash ≠ the target's current hash (`W104`, or an error if `stale-links: block`).
+- **Stale link:** the pinned hash ≠ the target's current hash (`W104`, or an error if `stale-links: block`). Links **from a replaced decision** (one that another decision `supersedes`) are not reported, because they are history, not something to review. Reports print one summary line instead, for example `1 replaced decision skipped (billing.invoices#D3, replaced by billing.invoices#D7)` (D-015).
 - **Stale prompt:** a `file` record's blob hash ≠ the current blob hash (`W110`). Contracts about that prompt need re-checking. A `prompt` node whose `file` doesn't exist is `W109`.
 - **Out-of-date lock:** `capsule`, `node` or `file` records ≠ current (`E010`). CI fails until someone runs `capsules lock`.
 

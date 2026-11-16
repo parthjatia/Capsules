@@ -131,3 +131,10 @@ Newest at the bottom. Entries are never edited, only superseded by a later entry
   - `W109` a prompt node's file doesn't exist
   - `W110` stale prompt (C7.4 described this case but gave it no code)
   - A **missing** lockfile stays `E010` ("out of date"), because the fix is the same: run `capsules lock`.
+
+## D-015: Replaced decisions are left out of stale reports
+
+- **Date:** 2026-11-16 · **Approved by:** Parth (who also approved D-014 as proposed)
+- **Changes:** C7.4
+- **Decision:** stale links whose source is a decision that another decision `supersedes` are not reported as `W104`, and don't count in `status`. `status`, `check`, `lock`, `refresh` and `relock` print one summary line instead, e.g. `1 replaced decision skipped (billing.invoices#D3, replaced by billing.invoices#D7)`.
+- **Why:** a replaced decision is history. Flagging it for review is noise that hides the items that need attention.

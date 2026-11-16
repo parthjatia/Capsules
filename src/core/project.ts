@@ -9,6 +9,7 @@ import {
   LOCK_FILE,
   lockChanges,
   parseLock,
+  splitReplaced,
   staleLinks,
   stalePrompts,
   type Lock,
@@ -249,7 +250,7 @@ function lockDiagnostics(
       .concat([...lockOnDisk.links.values()].map((l) => l.hash)),
   );
   const short = (h: string) => prefix.get(h) ?? h.slice(0, 4);
-  for (const s of staleLinks(lockOnDisk, current)) {
+  for (const s of splitReplaced(staleLinks(lockOnDisk, current), capsules).report) {
     const d = msg.W104(
       where.get(s.from) ?? {},
       s.from,

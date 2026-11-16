@@ -1,6 +1,6 @@
 # Capsules
 
-> Status: early development (milestone M4b). Not published yet.
+> Status: early development (milestone M5). Not published yet.
 
 Capsules is a free, open-source command-line tool that keeps a Git-stored, nested record of what each part of an AI-built app is meant to do. It shows that record to people and to agents, and it blocks AI agents from quietly breaking it.
 
@@ -63,6 +63,14 @@ Other commands:
 - `capsules context <capsule or file>` prints what an agent should know before working there: the rules, inherited rules, concerns and rejected options. `--budget 4000` keeps it short.
 - `capsules context --for judge` gives the judge the diff and the contracts to judge. `capsules verdict record --file verdict.json` stores its verdicts as Git notes; `capsules verdict show` prints them. Verdicts are advice; they never block.
 - `capsules codeowners` prints suggested CODEOWNERS lines.
+
+## The map
+
+```sh
+capsules map --open      # one offline web page: .capsules/_cache/map.html
+```
+
+It starts with a summary line and a **Needs attention** list (stale rules, failing and unreviewed checks, files with no capsule), then a file search that answers like `capsules explain`, the tree of areas with their concerns as coloured tags, and the concerns. It makes no network requests. `capsules map --format mermaid` prints a diagram for a README or pull request; `--format json` prints the whole graph. In Claude Code, `/capsules-map` explains the map in plain words.
 
 ## Known limits
 

@@ -91,7 +91,7 @@
 - **Docs checked** (D-024): Claude Code [hooks](https://code.claude.com/docs/en/hooks) and [rules](https://code.claude.com/docs/en/memory), and [Cursor rules](https://cursor.com/docs/context/rules).
 - **Tests:** 226 (unit and end-to-end), including F1 scenario 4.
 
-### M4b: Install, remove, doctor, context and verdicts (in review, waiting for Parth's go)
+### M4b: Install, remove, doctor, context and verdicts (merged, PR #7)
 
 - **`capsules init`** shows a plan of every file it will create or change and asks first (`--yes` to skip asking, `--dry-run` to only look). It creates a starter `.capsules/` (a draft root capsule, so nothing blocks yet) if there is none, the Claude Code commands (`/capsules-draft`, `/capsules-work`, `/capsules-judge`), the judge and drafter sub-agents, the skill, and the compiled rules. It merges the hooks into `.claude/settings.local.json`, keeping your own settings, and keeps that file out of Git (D-026). `--git-hooks` adds the commit-msg hook, `--workflow` adds `.github/workflows/capsules.yml`. It never overwrites a file it didn't create.
 - **`capsules remove`** undoes all of it, byte for byte; `--all` also deletes `.capsules/`. Tested: init, doctor, remove leaves the repo identical (F1 scenario 8).
@@ -101,6 +101,15 @@
 - **`capsules verdict record --file <f>`** checks the judge's JSON (C13) and stores it as a Git note under `refs/notes/capsules`; **`verdict show`** prints it. Advice only.
 - **`capsules codeowners`** prints suggested CODEOWNERS lines.
 - Docs checked: [sub-agents](https://code.claude.com/docs/en/sub-agents), [slash commands](https://code.claude.com/docs/en/slash-commands), [skills](https://code.claude.com/docs/en/skills), [settings](https://code.claude.com/docs/en/settings) (D-026).
+
+### M5: The map (in review, waiting for Parth's go)
+
+- **`capsules map`** writes `.capsules/_cache/map.html`, one offline page (its security policy forbids network requests), identical byte for byte across runs and machines. From the top: the summary line, **Needs attention** (errors, stale rules, failing checks, unreviewed checks, orphan files, assumptions past review; each links into the tree), a **file search** that gives the same answer as `capsules explain`, the **area tree** with intents, health and concern tags, and the **concerns** (D-027).
+- `--open` opens it in your browser; `--out <file>` writes elsewhere; `--dry-run` writes nothing.
+- **`--format mermaid`** prints a diagram for READMEs and pull requests; **`--format json`** the whole graph.
+- **`/capsules-map`** in Claude Code runs the map and explains it in plain words. `capsules init` installs it.
+- Checked in a real browser (headless Edge): light and dark themes, the search, and phone width (nothing wider than 390 px).
+- Takes about 1.7 s on the demo, mostly Git work to find unreviewed checks.
 
 ## Speed measurements (M1, as asked in D-006)
 
@@ -136,7 +145,16 @@ Node itself takes about 69 ms to start on this machine. CI prints the same numbe
 
 ## Next
 
-- **M5:** the map (`capsules map` in HTML, Mermaid and JSON), and `/capsules-map`.
+- **M6:** ship v0.1.0: the GitHub Action with the sticky pull request summary (C17), the release workflow, README, demo repo and the 45-second demo script. Tag `v0.1.0` only with Parth's OK.
+
+## How to demo M5
+
+```sh
+npm run build
+node scripts/demo-m5.mjs --open
+```
+
+You should see the summary line `5 areas · 2 concerns · 9 rules · 4 stale · 2 checks failed` and a Mermaid diagram in the terminal, and the map opens in your browser. At the top of the page: **Needs attention (9)** with stale rules, failing checks, one unreviewed check and one file with no capsule. Click `billing.invoices` in a stale-rule line: the page jumps to that area in the tree. Type `checkout` in **Find a file**: you see `src/web/checkout.tsx` with its home, concerns, rules and who may edit it. In the tree, Web carries the tags `payments` and `pii`.
 
 ## How to demo M4b
 

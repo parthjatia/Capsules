@@ -44,6 +44,7 @@ export const CLAUDE_TEMPLATES: [string, string][] = [
   [".claude/commands/capsules-draft.md", "claude/commands/capsules-draft.md"],
   [".claude/commands/capsules-work.md", "claude/commands/capsules-work.md"],
   [".claude/commands/capsules-judge.md", "claude/commands/capsules-judge.md"],
+  [".claude/commands/capsules-map.md", "claude/commands/capsules-map.md"],
   [".claude/agents/capsules-judge.md", "claude/agents/capsules-judge.md"],
   [".claude/agents/capsules-drafter.md", "claude/agents/capsules-drafter.md"],
   [".claude/skills/capsules/SKILL.md", "claude/skills/capsules/SKILL.md"],

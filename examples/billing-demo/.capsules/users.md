@@ -3,6 +3,7 @@ title: Users
 covers:
   - src/users/**
   - tests/users/**
+  - tests/auth/**
 ---
 
 # Users

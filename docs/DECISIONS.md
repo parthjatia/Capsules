@@ -265,3 +265,19 @@ Newest at the bottom. Entries are never edited, only superseded by a later entry
   4. `/capsules-map` waits for M5, when `capsules map` exists.
   5. `capsules context --for judge` works without a target: it lists the contracts that apply to every changed file, plus the diff. The context pack's warnings come first (C16 lists them last in the table, but says "warnings first").
   6. When `init` can't find a GitHub noreply address in the Git settings, it says that the owner's commits won't be recognised yet, and how to fix it (C5.3). It never writes an email into `permissions.yaml`.
+
+## D-027: The map's summary line, needs-attention list, concern tags and --open
+
+- **Date:** 2026-11-16 · **Approved by:** Parth
+- **Changes:** C14, C15 (`map`)
+- **Decision:**
+  1. The page starts with a one-line summary (`5 areas · 2 concerns · 9 rules · 0 stale · checks not run yet`), then a **Needs attention** list (errors, stale rules, failing checks, unreviewed checks, orphan files, assumptions past review), each linking to its capsule in the tree.
+  2. Each area in the tree shows the concerns that reach its files as coloured tags, linking to the concern.
+  3. `capsules map` writes the file and prints its path; `--open` also opens it in the default browser.
+- **Interpretations:**
+  1. "Stale" in the summary counts stale links plus stale prompts (C7.4): each is one thing someone must review.
+  2. Unreviewed checks are worked out the way `capsules check` does (new check files added together with code since the base, C6.2); `--base <ref>` picks the base. Each links to the capsule whose check names that file most specifically (for example `web`'s `tests/web/**` over `root`'s `tests/**`).
+  3. Errors are listed too, because the map may be incomplete while the capsules have errors. Assumptions past review are listed because they need a human decision.
+  4. "Orphans nearby" puts each orphan with the area that is home to most files in the same folder, or `root`.
+  5. Check status: `checks passed` only when every check passed in the last `capsules check`; `checks passed (4 of 6 run)` when some weren't run; `N checks failed` otherwise; `checks not run yet` with no results.
+  6. Determinism: the page holds no timestamps, durations or absolute paths; tested across two copies of the repo in different folders.

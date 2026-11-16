@@ -547,11 +547,15 @@ Installed under `.claude/` (verify the current Claude Code formats for commands,
 ## C14. The map (`capsules map`)
 
 - `--format html` (default) writes one self-contained file to `.capsules/_cache/map.html`: inline CSS and plain JS, **no network requests**, deterministic ordering.
-- It shows:
-  - the area tree with titles and intents
+- It shows, from the top (D-027):
+  - a one-line summary, for example `6 areas · 2 concerns · 14 rules · 1 stale · checks passed`
+  - **Needs attention**: errors, stale rules, failing checks, unreviewed checks, orphan files and assumptions past review, each linking to its place in the tree
+  - a search box over files: type a path and see its `explain` result
+  - the area tree with titles and intents, and the concerns that reach each area as coloured tags
   - concerns, and which capsules and files they cover
   - per capsule: number of contracts, check status from `last-check.json`, stale links, orphans nearby
-  - a search box over files: type a path and see its `explain` result
+- The page carries a Content-Security-Policy that forbids every network request. No timestamps and no machine paths, so the same files give the same bytes on every machine.
+- `capsules map` prints the file's path and the summary line. `--open` also opens it in the default browser (a local file; no network).
 - `--format mermaid` prints a Mermaid graph, for READMEs and pull requests.
 - `--format json` prints the full graph for other tools.
 
@@ -573,7 +577,7 @@ Exit codes: `0` OK · `1` problems found (errors, failing checks, violations) ·
 | `capsules compile [--check]` | Agent files (C10) |
 | `capsules hook <pre-edit\|pre-bash\|stop>` | Called by agent hooks only |
 | `capsules verdict record --file <f>` · `verdict show [commit]` | Verdicts (C13) |
-| `capsules map [--format html\|mermaid\|json] [--out <f>]` | The map (C14) |
+| `capsules map [--format html\|mermaid\|json] [--out <f>] [--open]` | The map (C14) |
 | `capsules codeowners` | Prints suggested CODEOWNERS lines for `.capsules/**` and check files |
 | `capsules doctor` | Proves we don't affect the app: lists every file we touched (from `installed.json`), confirms none is in `build.outputs` or app code, confirms `package.json` is unchanged by us, then runs `build.command` and `build.test` and reports the results |
 | `capsules remove [--yes]` | Removes everything in `installed.json`, un-merges our hook entries, and removes the AGENTS.md block. Leaves `.capsules/` unless `--all` |

@@ -248,3 +248,17 @@ Newest at the bottom. Entries are never edited, only superseded by a later entry
 - **Changes:** C8, README (known limits)
 - **Decision:** branch protection and required CODEOWNERS reviews aren't available for private repositories on GitHub Free. There, GitHub can't require checks or owner approvals, so capsules reports problems in CI but can't block merges; the agent hooks still block live. When this repo becomes public, make `ci-ok` a required check on `main`.
 - **Also decided:** Claude does its own work on this repo inside a capsules session (`capsules work … --agent default`), so its commits carry `Capsule-*` trailers and the guard treats that work as an agent's, not Parth's.
+
+## D-026: Hooks go in settings.local.json for now; agents may not edit Claude Code settings
+
+- **Date:** 2026-11-16 · **Approved by:** Parth
+- **Changes:** C5.1, C5.2, C11, C15 (`init`)
+- **Decision:**
+  1. `init` merges our hooks into `.claude/settings.local.json`, pointing at the capsules that ran `init` on this machine. Each person runs `init` once; CI stays the shared gate. `init` adds the file to `.git/info/exclude`, because Claude Code only keeps it out of Git when Claude Code creates it ([settings docs](https://code.claude.com/docs/en/settings)).
+  2. `.claude/settings.json` and `.claude/settings.local.json` are `edit-config`, humans only, in the hooks (`pre-edit`, `pre-bash`) and in CI, so an agent can't remove its own guard.
+  3. After we publish: `init --shared` writes the hooks into the committed `.claude/settings.json`, calling a globally installed `capsules` (`npm install -g @pyscoparth/capsules`). Not `npx`, which would add 0.2 to 0.4 s to every edit.
+- **Docs checked (2026-11-16):** [sub-agents](https://code.claude.com/docs/en/sub-agents) (`.claude/agents/`, `name`, `description`, `tools` as a comma-separated string; hooks get `name` as `agent_type`), [slash commands](https://code.claude.com/docs/en/slash-commands) (`.claude/commands/*.md` still works; skills are preferred for new work), [skills](https://code.claude.com/docs/en/skills) (`.claude/skills/<name>/SKILL.md`, `description` recommended), [settings](https://code.claude.com/docs/en/settings) (`settings.local.json` is per machine, hooks reload live, lists merge across files).
+- **Interpretations:**
+  1. The C12 command files stay in `.claude/commands/` as the spec says; they still work. Moving them to skills is a later option.
+  2. `installed.json` lists each file `init` created (with its Git blob hash, so `remove` can tell whether you changed it), each JSON file it merged hooks into (with our exact entries and the file's bytes before), the managed `AGENTS.md` block, and the `.git/info/exclude` line. `remove` puts a merged file back byte for byte when nothing else changed in it.
+  3. `init` never overwrites a file it didn't create: an existing `.git/hooks/commit-msg` or workflow file is left alone and reported.

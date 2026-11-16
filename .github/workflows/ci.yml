@@ -62,9 +62,40 @@ jobs:
         working-directory: examples/billing-demo
         # --base HEAD: the demo is test data, so validate it without guarding this PR's history.
         run: node ../../dist/cli.js check --no-run --base HEAD
+      - name: hook speed (report only; shared runners vary, so this never fails the build)
+        continue-on-error: true
+        run: node scripts/bench-hooks.mjs
       - name: npx . --version
         shell: bash
         run: |
           out="$(npx --yes . --version)"
           echo "capsules --version -> $out"
           test "$out" = "$(node -p "require('./package.json').version")"
+
+  # One result for the whole run (D-022). On pull requests, a macOS job that was cancelled
+  # before running any step (no runner was free) counts as skipped, not failed. Every other
+  # failure, timeout or cancellation fails. macOS still runs, and must pass, on main.
+  ci-ok:
+    needs: [plan, test]
+    if: always()
+    runs-on: ubuntu-latest
+    permissions:
+      actions: read
+    steps:
+      - env:
+          GH_TOKEN: ${{ github.token }}
+          EVENT: ${{ github.event_name }}
+        run: |
+          gh api "repos/$GITHUB_REPOSITORY/actions/runs/$GITHUB_RUN_ID/attempts/$GITHUB_RUN_ATTEMPT/jobs?per_page=100" > jobs.json
+          jq -r '.jobs[] | select(.name != "ci-ok") | "\(.name): \(.conclusion // "unfinished") (\(.steps | length) steps)"' jobs.json
+          bad=$(jq -r --arg event "$EVENT" '
+            [.jobs[]
+              | select(.name != "ci-ok")
+              | select(.conclusion != "success" and .conclusion != "skipped")
+              | select(($event == "pull_request" and (.name | startswith("macos")) and .conclusion == "cancelled" and (.steps | length) == 0) | not)
+              | .name] | join(", ")' jobs.json)
+          if [ -n "$bad" ]; then
+            echo "::error::Failed: $bad"
+            exit 1
+          fi
+          echo "All jobs passed (a macOS job that never got a runner is not counted on pull requests)."

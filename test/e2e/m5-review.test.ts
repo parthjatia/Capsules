@@ -257,6 +257,12 @@ describe("the page can't make network requests", () => {
       "default-src 'none'; style-src 'unsafe-inline'; script-src 'unsafe-inline'; base-uri 'none'; form-action 'none'",
     ]);
     expect(page.toLowerCase().match(/content-security-policy/g)).toHaveLength(1);
+    // Browsers only obey the rule in the <head>, before anything it governs.
+    const at = page.indexOf('http-equiv="Content-Security-Policy"');
+    expect(at).toBeGreaterThan(page.indexOf("<head>"));
+    expect(at).toBeLessThan(page.indexOf("</head>"));
+    expect(at).toBeLessThan(page.indexOf("<style>"));
+    expect(at).toBeLessThan(page.indexOf("<script"));
     // Nothing that loads from elsewhere, written any way.
     for (const s of [
       /\bsrc\s*=/i,

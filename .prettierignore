@@ -1,0 +1,9 @@
+dist/
+node_modules/
+coverage/
+package-lock.json
+LICENSE
+CLAUDE.md
+docs/SPEC.md
+.capsules/_cache/
+.capsules/

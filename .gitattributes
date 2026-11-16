@@ -1,0 +1,4 @@
+# Keep LF everywhere so hashes and generated files are identical on every OS (B11).
+* text=auto eol=lf
+# Test fixtures that deliberately use CRLF must opt out, e.g.:
+# test/fixtures/crlf/** -text

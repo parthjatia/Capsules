@@ -1,0 +1,23 @@
+# Added by `capsules init --workflow`. Runs the capsules guard on every pull request.
+# Remove with `capsules remove`.
+name: capsules
+
+on:
+  pull_request:
+
+permissions:
+  contents: read
+
+jobs:
+  capsules:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v5
+        with:
+          fetch-depth: 0 # capsules compares against the pull request's base
+      - uses: actions/setup-node@v5
+        with:
+          node-version: 22
+      # Until capsules is published, replace this with how you install it.
+      - run: npm install -g @pyscoparth/capsules
+      - run: capsules check --ci

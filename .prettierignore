@@ -7,3 +7,5 @@ CLAUDE.md
 docs/SPEC.md
 .capsules/_cache/
 .capsules/
+# Templates with {{placeholders}}: not valid YAML until filled in.
+templates/capsules/

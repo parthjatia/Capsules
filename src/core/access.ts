@@ -18,6 +18,25 @@ export const ACTIONS = [
 ] as const;
 export type Action = (typeof ACTIONS)[number];
 
+/** Claude Code's project settings: they hold the hooks, so only humans may change them (D-026). */
+export const CLAUDE_SETTINGS = [".claude/settings.json", ".claude/settings.local.json"];
+
+/**
+ * Settings files are humans-only (C5.1, C5.2): permissions.yaml is `edit-permissions`;
+ * config.yaml, CI workflows and Claude Code's project settings are `edit-config`
+ * (D-020, D-026). Anything else: null.
+ */
+export function settingsAction(path: string): "edit-config" | "edit-permissions" | null {
+  if (path === ".capsules/permissions.yaml") return "edit-permissions";
+  if (
+    path === ".capsules/config.yaml" ||
+    path.startsWith(".github/workflows/") ||
+    CLAUDE_SETTINGS.includes(path)
+  )
+    return "edit-config";
+  return null;
+}
+
 /** The parsed shape of permissions.yaml (C5). */
 export interface Perms {
   solo: boolean;

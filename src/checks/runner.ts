@@ -43,7 +43,7 @@ const field = (n: CapsuleNode, key: string) => n.fields.find((f) => f.key === ke
 
 const OUTPUT_LINES = 15;
 
-interface Ran {
+export interface Ran {
   code: number | null;
   output: string;
   timedOut: boolean;
@@ -54,7 +54,7 @@ interface Ran {
  * Run one shell command. On timeout, stop the whole process tree: killing only the shell
  * would leave the command itself running (and, on Windows, holding our pipes open).
  */
-function runCommand(command: string, cwd: string, seconds: number): Promise<Ran> {
+export function runCommand(command: string, cwd: string, seconds: number): Promise<Ran> {
   return new Promise((done) => {
     let output = "";
     let timedOut = false;

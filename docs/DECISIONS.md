@@ -52,3 +52,58 @@ Newest at the bottom. Entries are never edited, only superseded by a later entry
 - **Follow-ups Parth asked for:**
   - Before M4, verify two claims against the official Claude Code docs and cite the pages: hook input has `agent_type` inside sub-agents, and exit code 1 does not block.
   - In M1, measure hook start-up time against the 150 ms target and report the numbers before choosing a fix.
+
+## D-007: Body fields are read anywhere in a node, by valid key only
+
+- **Date:** 2026-11-16 · **Approved by:** Parth
+- **Changes:** C2.2
+- **Decision:** a line is a field only if it is on its own line and starts with a key valid for that node type (C2.3), followed by `:`. Fields may appear before or after the prose. Any other `word: text` line is prose. Lines inside fenced or indented code blocks are never fields. Blank lines under the heading are ignored.
+- **Why:** the C2 example put `checked-by:` after the prose, which contradicted "fields at the start". Markdown formatters such as Prettier insert a blank line under every heading, which must not change a capsule's meaning.
+
+## D-008: Gaps in the spec filled during M1
+
+- **Date:** 2026-11-16 · **Status:** approved by Parth with one change: every error situation that was sharing the closest existing code gets its own code (see item 2). Written into C1, C2.1, C2.6 and C4.
+- **Choices:**
+  1. **Project root = nearest folder with `.capsules/`.** Searched from the current folder up to the Git top level. C1 says `.capsules/` sits at the repo root, and in a normal repo that's the same thing. This lets `examples/billing-demo` (and monorepo packages) have their own `.capsules/`. `git ls-files` runs from that folder, so paths are relative to it.
+  2. **Error codes for cases C2.6 doesn't name:**
+     - malformed heading, or an id in the wrong format (e.g. `contract X1`) → `E001`
+     - a single-value field repeated, or a bad field value (`scope`, `timeout`, `review-by`) → `E007`
+     - unknown front matter keys, invalid capsule file names, owners not in `permissions.yaml`, and invalid `config.yaml` / `permissions.yaml` → `E008`
+     - missing `.capsules/root.md` → `E013`
+  3. **Draft capsules:** errors inside a `status: draft` capsule are reported as warnings, so they never fail `check` (C2.1 "draft capsules never block").
+  4. **Unknown keys in `config.yaml` and `permissions.yaml` are errors.** A typo like `weakend-tests: block` must not silently fall back to the default.
+- **Why:** each was needed to build M1, and none changes a rule that is already written down.
+
+## D-009: Node 22 minimum; slimmer CI
+
+- **Date:** 2026-11-16 · **Approved by:** Parth
+- **Changes:** B14, D3, `package.json` `engines`, CI
+- **Decision:** capsules requires Node 22 or later, and CI tests Node 22 and 24 only:
+  - Linux runs both 22 and 24.
+  - Windows runs 22.
+  - macOS runs 22, but only for pull requests into `main` and pushes to `main`.
+- **Why:** Node 20 has been end-of-life since April 2026. The macOS rule saves the private repo's free Actions minutes, since macOS minutes cost 10×.
+
+## D-010: Hook speed approach and targets
+
+- **Date:** 2026-11-16 · **Approved by:** Parth
+- **Changes:** C11, F2
+- **Decision:** hooks run from a small separate entry point that loads only hook code, and read a saved index of the parsed capsules from `.capsules/_cache/`. The index is rebuilt only when a capsule or settings file has changed. Targets on a 1,000-file repo: under 150 ms on macOS and Linux, under 300 ms on Windows. Measure again in M4.
+- **Why:** M1 measured about 350 ms on Windows for a full load, against 69 ms for bare Node start (see docs/PROGRESS.md).
+
+## D-011: Every borrowed error situation gets its own code
+
+- **Date:** 2026-11-16 · **Approved by:** Parth (his change to D-008 item 2)
+- **Changes:** C1, C2.6. This replaces the code mapping in D-008 item 2.
+- **Decision:**
+  - `E016` heading can't be read (was E001)
+  - `E017` id in the wrong format (was E001)
+  - `E018` single-value field repeated (was E007)
+  - `E019` invalid field value (was E007)
+  - `E020` invalid capsule file name (was E008)
+  - `E021` owner not in `permissions.yaml` (was E008)
+  - `E022` invalid `config.yaml` / `permissions.yaml` (was E008)
+  - `E023` missing `.capsules/root.md` (was E013)
+  - `E024` unknown link type word (was E006)
+  - `E025` reference that can't be read (was E003)
+- **Why:** one code per situation makes messages, docs and `--json` consumers unambiguous.

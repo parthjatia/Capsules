@@ -33,7 +33,9 @@ Rules:
 - **Capsule ids come from paths.** `.capsules/root.md` → `root`. `.capsules/billing.md` → `billing`. `.capsules/billing/invoices.md` → `billing.invoices`. `.capsules/_concerns/pii.md` → `pii`.
 - **Parents.** The parent of `a.b` is `a`; the parent of a top-level capsule is `root`. A folder `billing/` without `billing.md` is error `E013`.
 - **Reserved.** Names starting with `_` are reserved for the tool. Concern ids must not equal a top-level area id (error `E012`).
-- **Ids** are lowercase letters, digits and `-`, separated by `.`.
+- **Ids** are lowercase letters, digits and `-`, separated by `.`. A capsule file name that isn't a valid id (for example `Billing.md` or `a.b.md`) is error `E020`; nest with folders, not dots.
+- **`.capsules/root.md` is required** (error `E023` if missing).
+- **Project root.** The project root is the nearest folder, from the current folder up to the Git top level, that contains `.capsules/`. In a normal repo that is the repository root; in a monorepo or the demo app (`examples/billing-demo`) it can be a subfolder. `git ls-files` runs from the project root, and every path is relative to it (D-008).
 
 ## C2. Capsule file format
 
@@ -94,7 +96,7 @@ src/billing/invoices/create.ts#createInvoice
 | `owners` | list of human keys from `permissions.yaml` | no (inherits from parent) | Who approves intent and contracts |
 | `covers` | list of globs, repo-relative, `/` separators | area: no; concern: yes | Files this capsule describes |
 | `excludes` | list of globs | no | Subtracted from `covers` |
-| `status` | `active` or `draft` | no (default `active`) | Draft capsules report but never block |
+| `status` | `active` or `draft` | no (default `active`) | Draft capsules report but never block: errors found in a draft capsule's file are reported as warnings (D-008) |
 
 ### C2.2 Heading grammar
 
@@ -104,7 +106,7 @@ src/billing/invoices/create.ts#createInvoice
 
 - `<ref>` is `@<node-id>` (same capsule) or `@<capsule-id>#<node-id>` (another capsule).
 - **Reserved repo prefix.** `@<repo>:<capsule-id>#<node-id>` (for example `@payments-service:billing#C3`) is reserved for future cross-repo links. `<repo>` uses the same characters as an id segment. v0.1 parses it and rejects it with `E015`. The `:` character is therefore never allowed inside a capsule or node id. This applies everywhere an address appears: heading links, `checked-by:`, `tripwire:`, `{{ @ref }}` transclusions, and CLI arguments such as `capsules why <address>` (which exit `64` with the same message).
-- Body **fields** are `key: value` lines at the start of the body. The first line that isn't a known field starts free text. Fields may repeat where noted.
+- Body **fields** are `key: value` lines. A line is a field only if, on its own line, it starts with a key that is **valid for that node type** (C2.3; for example `checked-by`, `run`, `files`, `rejected`), immediately followed by `:`. Fields may appear anywhere in the body, before or after the prose. Any other `word: text` line stays prose. Lines inside code blocks (fenced or indented) are never fields. Blank lines directly under the heading are ignored, so Markdown formatters can't change a capsule's meaning. Fields may repeat where noted.
 - `checked-by:` may appear as a field or as a heading link. Both mean the same thing.
 
 ### C2.3 Node types
@@ -161,6 +163,16 @@ Errors (`E`) fail `capsules check`. Warnings (`W`) are reported only.
 | E013 | Folder without its capsule file |
 | E014 | Concern covers no files |
 | E015 | Cross-repo address (`<repo>:capsule#node`) is reserved and not supported yet in v0.1. Fix: point to a capsule in this repo, or remove the link until cross-repo links ship |
+| E016 | Node heading can't be read (empty, no id after the type, or a reference with no link type before it) |
+| E017 | Node id has the wrong format for its type (for example `contract X1`; see C2.3) |
+| E018 | A single-value field appears more than once in a node (for example two `run:` lines) |
+| E019 | A field value is invalid (`scope` not `tree`/`own`, `timeout` not a whole number, `review-by` not a date) |
+| E020 | Capsule file name is not a valid capsule id |
+| E021 | A capsule owner is not listed under `humans` in `permissions.yaml` |
+| E022 | `config.yaml` or `permissions.yaml` is invalid, including unknown keys |
+| E023 | `.capsules/root.md` is missing |
+| E024 | Unknown link type word in a heading |
+| E025 | A reference can't be read (not `@node` or `@capsule#node`) |
 | W101 | Tracked file has no home capsule (orphan); see `ignore` in config |
 | W102 | Contract has no `serves` intent |
 | W103 | Contract or example has no check |
@@ -197,6 +209,8 @@ decisions: web#D2 (rejected: client-side tax calculation)
 ```
 
 ## C4. `config.yaml`
+
+Missing keys take the defaults below. **Unknown keys are errors** (`E022`), in `config.yaml` and `permissions.yaml` alike: a typo such as `weakend-tests: block` must never silently fall back to a weaker default (D-008).
 
 ```yaml
 format: 0.1
@@ -452,7 +466,7 @@ Hook protocol facts (verify against [Claude Code hooks docs](https://code.claude
 
 - Input is JSON on stdin, with `tool_name`, `tool_input` (for example `file_path`, `content`, `old_string`, `new_string`), `session_id`, `cwd`, and `agent_type` inside sub-agents.
 - **To block: write the reason to stderr and exit with code 2.** Exit code 1 does **not** block ([source](https://blakecrosley.com/blog/claude-code-hooks-explained)).
-- Hooks must be fast. Target under 150 ms on a 1,000-file repo; cache the parsed index in `_cache/`.
+- Hooks must be fast. Target on a 1,000-file repo: **under 150 ms on macOS and Linux, under 300 ms on Windows** (Node starts more slowly there). To get there, hooks run from a **small separate entry point** that loads only hook code, and read a **saved index** of the parsed capsules from `_cache/`. The index is rebuilt only when a capsule or settings file has changed (D-010).
 - If our hook crashes: with `on-error: open`, print a warning and exit 1, which shows the error and continues. With `closed`, exit 2. Never leave the user's agent stuck because of our bug.
 
 ## C12. Agent commands, skill and judge

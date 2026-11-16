@@ -1,0 +1,18 @@
+format: 0.1
+solo: true
+humans:
+  parth: { github: "parthjatia", owns: ["**"] }
+roles:
+  builder:
+    may: [edit-code, add-checks, edit-context, add-decisions]
+  drafter:
+    may: [edit-context, add-decisions, add-checks,
+          propose-intent, propose-contracts, propose-examples]
+  judge:
+    may: [read]
+agents:
+  default:          { role: builder, capsules: ["**"] }
+  billing-agent:    { role: builder, capsules: ["billing", "billing.**"] }
+  frontend-agent:   { role: builder, capsules: ["web", "web.**"], blocked-by: [payments, pii] }
+  capsules-judge:   { role: judge,   capsules: ["**"] }
+  capsules-drafter: { role: drafter, capsules: ["**"] }

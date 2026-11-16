@@ -10,6 +10,7 @@ ignore:
   - "CLAUDE.md"
   - "LICENSE"
   - "docs/**"
+  - "examples/**"               # the demo app has its own .capsules/
   - "**/package-lock.json"
   - ".gitignore"
   - ".gitattributes"

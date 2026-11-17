@@ -552,7 +552,7 @@ describe("the base and running checks (C6.4, C9.1)", () => {
     expect(run(dir, "check").stdout).toContain(
       "none to run: no capsule's files changed (use --all to run every check)",
     );
-    expect(check(dir, "--all").checks.length).toBe(6);
+    expect(check(dir, "--all").checks.length).toBe(7);
   });
 
   it("--ci with ci.mode report exits 0 but still reports; block exits 1", () => {

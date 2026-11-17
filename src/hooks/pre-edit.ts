@@ -1,9 +1,11 @@
 // `capsules hook pre-edit` (C11): simulate an Edit/Write/MultiEdit/NotebookEdit, classify it
 // (C5.2), check permissions, and apply the one rule within the session (C6.2, D-024).
+import { isProposalPath, proposalCapsule } from "../core/proposal-path.js";
 import { existsSync, readFileSync } from "node:fs";
 import { isAbsolute, relative, resolve, sep } from "node:path";
 import picomatch from "picomatch";
-import { agentMay, settingsAction, type Action } from "../core/access.js";
+import { agentMay, gentleRelaxes, settingsAction, type Action } from "../core/access.js";
+import { recordGentle } from "./session.js";
 import {
   capsuleFromPath,
   capsulesJudgedByFile,
@@ -89,6 +91,7 @@ function isAdditive(before: string, after: string): boolean {
 
 const TOOL_FILES = new Set([
   ".capsules/capsules.lock",
+  ".capsules/approvals.lock",
   ".capsules/installed.json",
   ".capsules/.gitignore",
 ]);
@@ -278,6 +281,17 @@ export async function preEdit(
       intents: [],
       rules: [],
     };
+  } else if (isProposalPath(path)) {
+    // C18.3: anyone (but a read-only role) may leave a new proposal; changing or removing an
+    // existing one is for owners.
+    facts = {
+      capsule: proposalCapsule(path),
+      concerns: [],
+      actions: [{ action: before === null ? "add-proposals" : "edit-proposals", detail: path }],
+      checks: [],
+      intents: [],
+      rules: [],
+    };
   } else {
     const cap = capsuleFromPath(path);
     if (cap) {
@@ -404,6 +418,7 @@ export async function preEdit(
 
   // Permissions (C5.2 step 3). After the one rule, whose message explains more.
   const approvals: string[] = [];
+  const gentle: string[] = [];
   for (const { action, detail } of facts.actions) {
     const v = agentMay(
       actor.agent,
@@ -413,6 +428,17 @@ export async function preEdit(
       index.permissions,
       actor.scope,
     );
+    if (gentleRelaxes(v, index.config.mode)) {
+      // C18.5: gentle mode only warns, and remembers what strict mode would have blocked.
+      gentle.push(`${actor.agent}: ${detail} (${v.allowed ? "" : v.reason})`);
+      recordGentle(root, {
+        agent: actor.agent,
+        file: path,
+        change: detail,
+        reason: v.allowed ? "" : v.reason,
+      });
+      continue;
+    }
     if (!v.allowed)
       return block(
         hookMsg.blocked(
@@ -440,5 +466,9 @@ export async function preEdit(
   for (const r of facts.rules) if (!t.rules.some((x) => x.addr === r.addr)) t.rules.push(r);
   writeTracking(root, actor.trackKey, t);
 
-  return approvals.length ? allow(hookMsg.approval(approvals.join("; "))) : allow();
+  const notices = [
+    ...gentle.map((g) => hookMsg.gentle(g)),
+    ...(approvals.length ? [hookMsg.approval(approvals.join("; "))] : []),
+  ];
+  return notices.length ? allow(notices.join("\n")) : allow();
 }

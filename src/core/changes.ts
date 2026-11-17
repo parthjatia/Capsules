@@ -20,6 +20,7 @@ import { parseCapsuleFile } from "./parse.js";
 import type { Action } from "./permissions.js";
 import { capsuleFromPath, checkFileMatcher as matcherFor } from "./judges.js";
 import { settingsAction } from "./access.js";
+import { isProposalPath, proposalCapsule } from "./proposal-path.js";
 import type { Project } from "./project.js";
 
 export interface UnitFile {
@@ -170,12 +171,12 @@ export interface NodeChange {
 export interface Classified {
   path: string;
   status: ChangeStatus;
-  kind: "code" | "check-file" | "capsule" | "settings" | "tool" | "ignored";
+  kind: "code" | "check-file" | "capsule" | "settings" | "tool" | "proposal" | "ignored";
   /** The capsule the change belongs to: the file's home (root for orphans), or the capsule edited. */
   capsule: string;
   concerns: string[];
   /** Each permission action the change needs, with what caused it. */
-  actions: { action: Action; detail: string }[];
+  actions: { action: Action; detail: string; node?: string }[];
   /** Check files: was the change purely additive? */
   additive?: boolean;
   /** Capsule files: what happened to each node, and whether the front matter changed. */
@@ -246,7 +247,13 @@ const NODE_ACTION: Record<NodeType, { added: Action | null; other: Action | null
   code: { added: "edit-code", other: "edit-code" },
 };
 
-const TOOL_FILES = new Set([LOCK_FILE, ".capsules/installed.json", ".capsules/.gitignore"]);
+// approvals.lock is tool-written too; who may change it is checked separately (E033, C18.4).
+const TOOL_FILES = new Set([
+  LOCK_FILE,
+  ".capsules/approvals.lock",
+  ".capsules/installed.json",
+  ".capsules/.gitignore",
+]);
 
 export function classify(
   f: UnitFile,
@@ -262,6 +269,11 @@ export function classify(
   const action = settingsAction(f.path);
   if (action) {
     return { ...base, kind: "settings", capsule: "root", actions: [{ action, detail: f.path }] };
+  }
+  if (isProposalPath(f.path)) {
+    const capsule = proposalCapsule(f.path);
+    const action: Action = f.status === "A" ? "add-proposals" : "edit-proposals";
+    return { ...base, kind: "proposal", capsule, actions: [{ action, detail: f.path }] };
   }
   const cap = capsuleFromPath(f.path);
   if (cap) {
@@ -280,7 +292,11 @@ export function classify(
       const rule = NODE_ACTION[nc.node.type];
       const action = nc.change === "added" ? rule.added : rule.other;
       if (action)
-        actions.push({ action, detail: `${nc.change} ${nc.node.type} ${cap.id}#${nc.node.id}` });
+        actions.push({
+          action,
+          detail: `${nc.change} ${nc.node.type} ${cap.id}#${nc.node.id}`,
+          node: `${cap.id}#${nc.node.id}`,
+        });
     }
     return { ...base, kind: "capsule", capsule: cap.id, actions, nodes, frontChanged };
   }

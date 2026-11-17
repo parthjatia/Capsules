@@ -207,7 +207,7 @@ export function planInit(cwd: string, opts: InitOptions): InitPlan {
     steps.push({
       path: p,
       change: before === null ? "create" : "merge",
-      why: `Claude Code hooks (pre-edit, pre-bash, stop) running ${cli}; your own settings are kept`,
+      why: `Claude Code hooks (session-start, pre-edit, pre-bash, stop) running ${cli}; your own settings are kept`,
     });
     if (before === null) ensureDir(p);
     writes.push(() => {

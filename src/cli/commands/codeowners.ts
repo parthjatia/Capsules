@@ -29,7 +29,7 @@ export function codeowners(io: Io, opts: { json?: boolean }): number {
       lines.push({ pattern, owners, why });
   };
 
-  add(`${prefix}.capsules/`, rootOwners, "capsules, settings and the lockfile");
+  add(`${prefix}.capsules/`, rootOwners, "capsules, settings, the lockfile and approvals.lock");
   for (const c of [...project.capsules].sort((a, b) => (a.file < b.file ? -1 : 1))) {
     const o = handles(ownersOf(project.capsules, c.id));
     if (o.join(" ") !== rootOwners.join(" ")) add(`${prefix}${c.file}`, o, `capsule ${c.id}`);

@@ -102,7 +102,7 @@
 - **`capsules codeowners`** prints suggested CODEOWNERS lines.
 - Docs checked: [sub-agents](https://code.claude.com/docs/en/sub-agents), [slash commands](https://code.claude.com/docs/en/slash-commands), [skills](https://code.claude.com/docs/en/skills), [settings](https://code.claude.com/docs/en/settings) (D-026).
 
-### M5: The map (in review, waiting for Parth's go)
+### M5: The map (merged, PR #8)
 
 - **`capsules map`** writes `.capsules/_cache/map.html`, one offline page (its security policy forbids network requests), identical byte for byte across runs and machines. From the top: the summary line, **Needs attention** (errors, stale rules, failing checks, unreviewed checks, orphan files, assumptions past review; each links into the tree), a **file search** that gives the same answer as `capsules explain`, the **area tree** with intents, health and concern tags, and the **concerns** (D-027).
 - `--open` opens it in your browser; `--out <file>` writes elsewhere; `--dry-run` writes nothing.
@@ -110,6 +110,18 @@
 - **`/capsules-map`** in Claude Code runs the map and explains it in plain words. `capsules init` installs it.
 - Checked in a real browser (headless Edge): light and dark themes, the search, and phone width (nothing wider than 390 px).
 - Takes about 1.7 s on the demo, mostly Git work to find unreviewed checks.
+
+### M6a: Zero friction (in review, waiting for Parth's go)
+
+- **Pull request summary** (C17): `capsules check --ci --summary <file>` writes the sticky comment's text. The **GitHub Action** (`action/action.yml`) runs it and posts or updates one comment. The workflows for this repo are in `docs/proposed-workflows/`, for Parth to copy (agents may not write `.github/workflows/`, D-020).
+- **Automatic sessions** (C18.1, D-030): a `SessionStart` hook opens one capsules session per Claude Code session and gives its shell `CAPSULES_SESSION`, so commits get the right trailers and parallel windows never take over each other's session.
+- **Keep going when blocked** (C18.7, D-036): every block message ends with a `next:` line: carry on, and leave a note with `capsules propose`.
+- **`capsules propose`** (C18.3, D-032): an agent leaves a proposal or a note for an owner in `.capsules/_proposals/` instead of changing a rule or a test. Open proposals are `W112`.
+- **`capsules review`** (C18.4, D-033): everything waiting for you, risky items in full first (changed rules, changed or new tests, proposals), routine items one line each. `review approve r1 …` records approvals in `.capsules/approvals.lock`; `--routine` never includes a rule or a test. Humans only; CI checks an owner made that commit (`E033`).
+- **Gentle mode** (C18.5, D-034): new installs start with `mode: gentle`. An agent outside its area only gets a warning (`W111`); weakening tests, the one rule, rules and the guard stay blocked. `capsules mode` lists what strict mode would have blocked; `capsules mode strict` switches.
+- **Starter checks** (C18.6, D-035): `/capsules-draft` may write a few new tests for examples you approved, when the app has few or none. They stay unreviewed until you approve them.
+- **End-of-task fast checks** (C18.2, D-031): the Stop report says what CI would fail on and reminds Claude to run `capsules check` for the tests. It never runs them.
+- **Fixed while dogfooding:** `pre-bash` now reads heredocs as data (a false block); a test file added earlier in the branch counts as new in CI too, as in the hooks (D-038).
 
 ## Speed measurements (M1, as asked in D-006)
 
@@ -145,7 +157,17 @@ Node itself takes about 69 ms to start on this machine. CI prints the same numbe
 
 ## Next
 
-- **M6:** ship v0.1.0: the GitHub Action with the sticky pull request summary (C17), the release workflow, README, demo repo and the 45-second demo script. Tag `v0.1.0` only with Parth's OK.
+- **M6b:** ship v0.1.0: the release workflow (npm trusted publishing), README for users, the demo repo, the 45-second demo script (`scripts/demo-45s.mjs`, draft) and the partner package rebuilt. Tag `v0.1.0` only with Parth's OK.
+- **v1 (Part H):** running the tests at the end of every task, the 7-day reminder to switch to strict mode, applying proposals automatically.
+
+## How to demo M6a
+
+```sh
+npm run build
+node scripts/demo-m6a.mjs
+```
+
+It runs in a throwaway copy of the demo app and prints seven numbered steps. You should see: (1) `capsules: opened session cc-… for this Claude Code session`; (2) the refund code edit `allowed`, then the test edit `BLOCKED` with a `next:` line telling Claude to carry on; (3) `Wrote .capsules/_proposals/…` (Claude's note for you); (4) gentle mode: frontend-agent's edit on a payments file is `allowed, with:` a `W111` warning, and `capsules mode` lists it; (5) the end-of-task line `capsules: 1 proposal waiting for you, 4 stale links. Next: run capsules review.`; (6) `capsules review` showing the changed rule before and after, then the note, then **example E1** (its rule before and now, and what E1 says, D-039), then routine items; (7) approving refused in Claude's shell, then `Approved: r1` in yours, with `Next: ask the drafter to update billing.invoices#E1 (and 3 others) first`, and the new line in `approvals.lock`.
 
 ## How to demo M5
 
@@ -222,6 +244,11 @@ You should see the checkout page's home (`web`), parents (`root`), concerns (`pa
 - Approvals are enforced by GitHub; the cosmetic owner check reads the event file (D-016). Commit identity via noreply addresses and optional `emails` (D-017). Default base (D-018). D-019 approved; CI workflows protected (D-020). This repo now commits with the GitHub noreply address.
 
 - M4 split into M4a and M4b (D-023); commit-msg Git hook only with `--git-hooks`; Cursor gets compiled rules only in v0.1. test-maintainer agent (D-021). macOS job without a runner doesn't fail a PR (D-022). Docs facts checked (D-024).
+
+## Left open from the PR #9 test review (minor)
+
+- In gentle mode, an agent's rule change (`propose-*`) outside its scope gets only `W111`, not also `W108`. CODEOWNERS still requires owner approval on GitHub, so the effect is small; fix in M6b.
+- Untested, low risk: an agent modifying (not deleting) an existing proposal in CI; E033 for a human who owns some but not all of the capsules an approval covers (the demo has one owner of everything).
 
 ## Open questions for Parth
 

@@ -13,6 +13,7 @@ ignore:
   - "**/package-lock.json"
   - "**/pnpm-lock.yaml"
   - "**/yarn.lock"
+mode: gentle # new installs: agents outside their scope only warn (W111). Run `capsules mode strict` when ready
 weakened-tests: warn
 ci:
   mode: report # switch to block once the capsules are approved

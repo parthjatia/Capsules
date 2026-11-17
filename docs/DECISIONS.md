@@ -281,3 +281,108 @@ Newest at the bottom. Entries are never edited, only superseded by a later entry
   4. "Orphans nearby" puts each orphan with the area that is home to most files in the same folder, or `root`.
   5. Check status: `checks passed` only when every check passed in the last `capsules check`; `checks passed (4 of 6 run)` when some weren't run; `N checks failed` otherwise; `checks not run yet` with no results.
   6. Determinism: the page holds no timestamps, durations or absolute paths; tested across two copies of the repo in different folders.
+
+## D-028: pre-bash follows `cd`, subshells and Git Bash paths
+
+- **Date:** 2026-11-16 · **Approved by:** Parth (M6 item 1)
+- **Changes:** none to the spec text; an interpretation of C11 (`pre-bash`)
+- **Decision:** `pre-bash` works out which folder each write happens in. It follows `cd`, `pushd` and `popd` (and their PowerShell forms), subshells, `NAME=value` variables, `~`, and a bare `cd` going home. An edit inside another folder, such as a temporary copy of the demo, is no longer mistaken for this repo's capsules (the false positive in `docs/DOGFOOD.md`).
+- **Interpretations:**
+  1. When the folder can't be known (`cd -`, an unknown `$VAR`, backticks or `$(…)`), writes are checked as if they happened in the hook's `cwd`, which is the safe side.
+  2. On Windows, Git Bash paths like `/c/Users/...` are read as `C:/Users/...`. Before this, such a path let a write to a protected file through.
+
+## D-029: `capsules check --summary <file>` writes the pull request summary
+
+- **Date:** 2026-11-16 · **Approved by:** Parth (M6 item 3)
+- **Changes:** C15 (`check`), C17
+- **Decision:** `capsules check --ci --summary <file>` also writes the C17 summary as Markdown. The GitHub Action (`action/action.yml`) posts it as one comment, found again by its first line `<!-- capsules-summary -->` and updated on every push. capsules itself still makes no network request (B1); the Action posts the comment with GitHub's `gh` tool.
+- **Interpretations:**
+  1. "Capsules:" lists the capsules the change touches: capsule files edited, and the home and concerns of each changed file. Ancestors are not listed.
+  2. The summary never prints an email address, because a pull request comment is visible to everyone who can see the pull request.
+  3. Agents may not write CI workflows (D-020), so the workflows that use the Action are prepared in `docs/proposed-workflows/`, and Parth copies them into `.github/workflows/` in his own commit.
+  4. The release workflow uses npm trusted publishing ([npm docs](https://docs.npmjs.com/trusted-publishers), checked 2026-11-16): `id-token: write`, npm 11.5.1 or later, no stored token. It refuses while `package.json` is `private`.
+
+## D-030: Automatic sessions from a SessionStart hook
+
+- **Date:** 2026-11-17 · **Approved by:** Parth (M6a item 1)
+- **Changes:** C8, C11, new C18.1
+- **Decision:** a `SessionStart` hook opens one capsules session per Claude Code session (agent `default`, or the `claude --agent` name). It passes the session to Claude's later shell commands through `CLAUDE_ENV_FILE`, so trailers are right without `capsules work`.
+- **Docs checked (2026-11-17):** [hooks](https://code.claude.com/docs/en/hooks). SessionStart runs on `startup`, `resume`, `clear`, `compact` and `fork`. It receives `source` and optionally `model`, `agent_type` ("present when you start Claude Code with `claude --agent <name>`") and `session_title`. It can't block. Its plain stdout is added as context Claude can see. "SessionStart hooks have access to the `CLAUDE_ENV_FILE` environment variable, which provides a file path where you can persist environment variables for the shell commands Claude runs later in the session."
+- **Interpretations:**
+  1. The session id comes from Claude Code's `session_id` (`cc-` plus 16 hex characters of its SHA-256), so a resumed or compacted session keeps its session and its one-rule tracking.
+  2. An automatic session never becomes the repo's "current" session. This fixes the clash found while planning the `test-maintainer` step: two Claude Code windows each get their own session.
+  3. `capsules work` inside an automatic session narrows it rather than starting a new one.
+
+## D-031: End-of-task fast checks; tests at end of task are v1
+
+- **Date:** 2026-11-17 · **Approved by:** Parth (M6a item 3, light version)
+- **Changes:** C11 (`Stop`), new C18.2, Part H
+- **Decision:** the Stop report also runs `capsules check --no-run`'s checks against the base: one rule, permissions, decisions, staleness, weakened-test signals and lock. It reports what CI would fail on and says `run capsules check to run your tests`. Running the tests at the end of every task moves to v1.
+
+## D-032: `capsules propose` and `.capsules/_proposals/`
+
+- **Date:** 2026-11-17 · **Approved by:** Parth (M6a items 6 and 7)
+- **Changes:** C1, C5.1, C15, new C18.3, Part H
+- **Decision:** agents never change intents, contracts, examples or existing checks to finish a task. They propose with `capsules propose`, which writes a note to `.capsules/_proposals/`, and the note appears in `capsules review`. Applying a proposal automatically moves to v1: a human or the drafter applies it.
+- **Interpretations:**
+  1. Proposal files are committed, so they reach the pull request and survive a lost cache.
+  2. Any role but `judge` may create one; changing or deleting an existing one is owners only.
+
+## D-033: `capsules review` and `approvals.lock`
+
+- **Date:** 2026-11-17 · **Approved by:** Parth (M6a item 4; `approvals.lock` approved as designed)
+- **Changes:** C1, C2.6 (`E033`, `E034`), C5.1, C6.2, C15, new C18.4
+- **Decision:** `capsules review` lists everything waiting for a human. Risky items come first, in full; routine items follow, one line each. An approval pins the exact version approved in the tool-written `.capsules/approvals.lock`. "Approve all" (`--routine`) never includes a rule, intent, example or check. Approving is humans only: the command refuses inside an agent's shell, and CI checks that each change to `approvals.lock` comes from an owner (`E033`).
+- **Interpretations:**
+  1. An approval holds only for the hash it pins: if the rule or test changes again, it is waiting for review again.
+  2. An approved item gets no `W108`, and an approved new check is no longer "unreviewed".
+  3. The local refusals can be bypassed by an agent with a shell, so CI and CODEOWNERS (`capsules codeowners` now lists `approvals.lock`) are the gate (B13, I1).
+
+## D-034: Gentle mode for new installs; the 7-day reminder is v1
+
+- **Date:** 2026-11-17 · **Approved by:** Parth (M6a item 5)
+- **Changes:** C2.6 (`W111`), C4 (`mode`), C15 (`mode`), new C18.5, Part H
+- **Decision:** `mode: gentle` turns only two kinds of `E027` into warnings (`W111`): an agent working outside its scope, and an agent editing a file covered by a concern it is barred from. Weakening or deleting existing checks, the one rule, edits to the guard, and changes to intents and contracts stay blocked in every mode. New installs start gentle; a missing `mode` means strict, so existing installs don't change. `capsules mode strict` switches, and is humans only.
+- **Interpretations:**
+  1. "What strict mode would have blocked" is kept on this machine (`_cache/gentle-log.jsonl`) and printed by `capsules mode`.
+  2. The suggestion after 7 days, counted from the Git date of the install commit, moves to v1.
+
+## D-035: Starter checks from approved examples
+
+- **Date:** 2026-11-17 · **Approved by:** Parth (M6a item 2)
+- **Changes:** C6.2, C12 (`/capsules-draft`), new C18.6
+- **Decision:** when an app has few or no tests, `/capsules-draft` may write a few new tests, only for examples the human approved. Check files added by a `drafter` session stay "unreviewed" until an owner approves them in `capsules review`.
+
+## D-036: When blocked, keep going
+
+- **Date:** 2026-11-17 · **Approved by:** Parth (M6a item 7)
+- **Changes:** C11 (block messages), C10 and C12 (agent files), new C18.7
+- **Decision:** every block message ends with the next step. The agent doesn't try another way around the block, carries on with the rest of the task, and, if a test or rule looks wrong, leaves a proposal with `capsules propose`.
+
+## D-037: M6 is split into M6a (zero friction) and M6b (ship)
+
+- **Date:** 2026-11-17 · **Approved by:** Parth
+- **Changes:** Part E, Part I4
+- **Decision:** M6a is the zero-friction set (C18), built in the order 1, 7, 6, 4, 5, 2, 3, plus the work already on the `m6` branch: the pre-bash fix, the partner package, and the GitHub Action with the sticky summary. M6b is the release workflow, the README, the demo repo, the 45-second demo script, and the partner package rebuilt with M6a.
+- **Also recorded (I4):** the commit-msg hook stays opt-in (`--git-hooks`). The demo concerns are auth, payments and pii; Parth will ask the design partners which matter most.
+
+## D-038: A test file added earlier in the branch counts as new for the one rule
+
+- **Date:** 2026-11-17 · **Approved by:** Parth
+- **Changes:** C6.2
+- **Why:** dogfooding M6a, the guard flagged Claude's own commit `d92cc0f`. It changed code and widened the import line of `test/e2e/m6a.test.ts`, a test file created one commit earlier in the same branch (E027 + E028). The live hook had allowed it, because the file was created in that session (D-024). CI judged each commit on its own and counted the file as existing. The hook and CI disagreed.
+- **Decision:** a check file counts as **existing** only if it existed at the base (C6.4), in every change unit, so CI agrees with the hooks. A test file added since the base counts as new: changing it alongside code is not V1 and needs only `add-checks`. Tests that existed at the base keep full protection.
+- **Interpretations:**
+  1. Such a file is still "unreviewed" until an owner approves it, and `capsules review` shows it in full at its final version, so a test weakened before anyone reviewed it is still in front of the human.
+  2. This applies to check **files**. Check **nodes** in capsule files are unchanged: changing an existing `check` node still needs `change-checks`.
+
+## D-039: A stale link from an example or an intent is not routine
+
+- **Date:** 2026-11-17 · **Approved by:** Parth (after running the M6a demo)
+- **Changes:** C18.4
+- **Why:** an example is what a human approves to say "this is what the rule means". When the rule changes, an example that still shows the old meaning is a risky mismatch. `capsules review approve --routine` could re-pin its link without anyone reading it.
+- **Decision:**
+  1. A stale link whose source is any node other than `code`, `context` or `decision` (in practice an example, contract or intent) is listed under "Read these". It shows the changed target's text at the base and now, and what the stale node says. `--routine` never includes it.
+  2. Stale links from `code`, `context` and `decisions` stay routine, one line each.
+  3. When an owner approves a changed rule (or intent), `capsules review approve` and the rule's own review line suggest: "ask the drafter to update E1 (and N others) first". It names the first node to update and counts the rest.
+- **Interpretation:** approving such a link item says "this example still holds as it is" and re-pins it. If the example needs new text, the drafter edits it (an owner approves it as a changed example), and the link is then refreshed.

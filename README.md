@@ -42,11 +42,21 @@ Claude Code hooks then check every edit as it happens:
 
 - `capsules hook pre-edit` blocks an edit that `permissions.yaml` doesn't allow, an edit to an existing decision, or a test change in a session that already changed the code the test judges.
 - `capsules hook pre-bash` blocks obvious shell writes to protected files.
-- `capsules hook stop` tells you at the end of a turn if the lockfile or rule files need updating.
+- `capsules hook session-start` opens a capsules session for each Claude Code session by itself, so its commits are labelled.
+- `capsules hook stop` tells you at the end of a turn what CI would fail on (the one rule, permissions, decisions, stale links), and reminds the agent to run `capsules check` for the tests.
 
 A blocked edit comes back to the agent with the reason and the fix. Hooks can be bypassed on your machine, so CI (`capsules check`) stays the real gate. `capsules work <capsules> --agent <name>` limits a session to some capsules and labels its commits.
 
 Try it: `node scripts/demo-m4a.mjs` (after `npm run build`).
+
+## Zero friction: propose, review, gentle mode
+
+- **When blocked, the agent keeps going.** Every block message says so, and the agent leaves a note instead of fighting the block: `capsules propose <rule or test file> --why "<reason>"`.
+- **`capsules review`** shows everything waiting for you: changed rules and tests in full first, routine items one line each. `capsules review approve r1 r2` approves them (written to `.capsules/approvals.lock`); `--routine` never approves a rule or a test. Run it in your own terminal: agents are refused, and CI checks an owner made the commit.
+- **Gentle mode** (the default for new installs): an agent working outside its area only gets a warning, while weakening tests, the one rule and rule changes stay blocked. `capsules mode` lists what strict mode would have blocked; `capsules mode strict` switches.
+- **Starter checks:** if your app has few tests, `/capsules-draft` can write a few new ones for the examples you approved. They stay unreviewed until you approve them.
+
+Try it: `node scripts/demo-m6a.mjs` (after `npm run build`).
 
 ## Install and remove
 

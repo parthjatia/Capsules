@@ -1,6 +1,11 @@
 import { capsuleMatches } from "../../core/access.js";
 import { findProjectRoot, loadProject, UsageError } from "../../core/project.js";
-import { endWorkSession, startWorkSession } from "../../hooks/session.js";
+import {
+  activeWorkSession,
+  endWorkSession,
+  narrowWorkSession,
+  startWorkSession,
+} from "../../hooks/session.js";
 import { toJson } from "../../report/json.js";
 import { errors } from "../../report/messages.js";
 import { EXIT } from "../exit-codes.js";
@@ -37,7 +42,12 @@ export function work(
   const ids = project.capsules.map((c) => c.id);
   const matched = ids.filter((id) => patterns.some((p) => capsuleMatches(id, p))).sort();
   if (!matched.length) throw new UsageError(errors.workNoCapsule(pattern, ids));
-  const s = startWorkSession(project.root, agent, spec.role, patterns);
+  // Inside a Claude Code session with an automatic session (C18.1), narrow that one.
+  const auto = activeWorkSession(project.root, env);
+  const s =
+    auto && auto.id.startsWith("cc-") && env.CAPSULES_SESSION?.trim() === auto.id
+      ? narrowWorkSession(project.root, auto, agent, spec.role, patterns)
+      : startWorkSession(project.root, agent, spec.role, patterns);
   if (opts.json) {
     io.out(toJson("work", { session: s, capsules: matched }));
     return EXIT.ok;

@@ -1,0 +1,26 @@
+# The Capsules guard on this repo's own pull requests, with the sticky summary comment (C17).
+# It builds capsules from this repo (install: source) until the package is published.
+# ci.yml already runs every test, so the checks aren't run twice here (--no-run).
+name: capsules
+
+on:
+  pull_request:
+
+permissions:
+  contents: read
+  pull-requests: write # to post and update the one summary comment
+
+jobs:
+  capsules:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v5
+        with:
+          fetch-depth: 0 # capsules compares against the pull request's base (C6.4)
+      - uses: actions/setup-node@v5
+        with:
+          node-version: 22
+      - uses: ./action
+        with:
+          install: source
+          args: --no-run

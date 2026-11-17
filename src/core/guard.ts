@@ -1,5 +1,7 @@
 // The CI guard (M3): permissions (C5.2), the one rule (C6.2), append-only decisions (C6.3),
 // weakened-test signals (C9.2) and the Capsule-Cosmetic owner check (C8, D-013).
+import { existsSync } from "node:fs";
+import { join } from "node:path";
 import picomatch from "picomatch";
 import { describeCheckChange, patternsOf, weakenedSignals } from "../checks/heuristics.js";
 import { changesSince, filesAt, revParse, WORKTREE, type Commit } from "../git/history.js";
@@ -16,6 +18,15 @@ import {
   type Classified,
 } from "./changes.js";
 import { nodeHash } from "./hash.js";
+import { hashObjects } from "../git/git.js";
+import {
+  APPROVALS_FILE,
+  changedRecords,
+  emptyApprovals,
+  fileApproved,
+  nodeApproved,
+  parseApprovals,
+} from "./approvals.js";
 import {
   actorLabel,
   humanFromEmail,
@@ -29,6 +40,7 @@ import { isIgnored } from "./membership.js";
 import { address, type Capsule, type CapsuleNode } from "./model.js";
 import { parseCapsuleFile } from "./parse.js";
 import { agentMay, type Action, type Verdict } from "./permissions.js";
+import { gentleRelaxes } from "./access.js";
 import { capsuleFromPath, checkJudges } from "./judges.js";
 import type { Project } from "./project.js";
 import { targetOf } from "./resolve.js";
@@ -60,9 +72,23 @@ export function guard(project: Project, base: Base, units: ChangeUnit[]): GuardR
     out.push(d);
   };
 
+  // D-038: a check file is "existing" only if it existed at the base, in every unit, as the
+  // hooks treat a file created in the session (D-024). A branch-new one stays unreviewed.
+  const baseRev = rangeBase(project, base);
+  const branchNew = (c: Classified): Classified =>
+    c.kind === "check-file" &&
+    c.status !== "A" &&
+    baseRev !== null &&
+    contents.get(baseRev, c.path) === null
+      ? {
+          ...c,
+          additive: true,
+          actions: [{ action: "add-checks", detail: `check file new in this branch ${c.path}` }],
+        }
+      : c;
   const classified = units.map((u) => ({
     unit: u,
-    files: u.files.map((f) => classify(f, project, contents, isCheckFile)),
+    files: u.files.map((f) => branchNew(classify(f, project, contents, isCheckFile))),
   }));
 
   // Permissions (C5.2), per commit and for uncommitted changes.
@@ -87,7 +113,7 @@ export function guard(project: Project, base: Base, units: ChangeUnit[]): GuardR
       } else for (const k of keys) found.add(k);
       add(v.diagnostic, v.capsules);
     }
-    for (const u of newChecksWithCode(files)) unreviewed.add(u);
+    for (const u of newChecksWithCode(files, isDrafter(project, unit))) unreviewed.add(u);
   }
 
   const from = rangeBase(project, base);
@@ -97,10 +123,11 @@ export function guard(project: Project, base: Base, units: ChangeUnit[]): GuardR
     weakenedTests(project, from, range, contents, isCheckFile, add);
   }
   cosmeticOwners(project, units, add);
+  approvalOwners(project, units, contents, add);
 
   return {
     diagnostics: out,
-    unreviewed: [...unreviewed].sort(),
+    unreviewed: [...unreviewed].filter((u) => !approvedNow(project, u)).sort(),
     changedPaths: range.map((r) => r.path).sort(),
   };
 }
@@ -126,10 +153,24 @@ function checkPermissions(project: Project, unit: ChangeUnit, files: Classified[
     { capsule: string; action: string; reason: string; what: string[] }
   >();
   const approval = new Map<string, string[]>();
+  const gentle = new Map<
+    string,
+    { capsule: string; action: string; reason: string; what: string[] }
+  >();
   for (const c of files) {
     for (const a of c.actions) {
       const v = decide(actor, a.action, c, project);
-      if (!v.allowed) {
+      if (!v.allowed && gentleRelaxes(v, project.config.mode)) {
+        const key = `${c.capsule}\0${a.action}\0${v.reason}`;
+        const entry = gentle.get(key) ?? {
+          capsule: c.capsule,
+          action: a.action,
+          reason: v.reason,
+          what: [],
+        };
+        entry.what.push(a.detail);
+        gentle.set(key, entry);
+      } else if (!v.allowed) {
         const key = `${c.capsule}\0${a.action}\0${v.reason}`;
         const entry = denied.get(key) ?? {
           capsule: c.capsule,
@@ -139,7 +180,7 @@ function checkPermissions(project: Project, unit: ChangeUnit, files: Classified[
         };
         entry.what.push(a.detail);
         denied.set(key, entry);
-      } else if (v.needsApproval) {
+      } else if (v.needsApproval && !approvedNow(project, a.node ?? c.path)) {
         approval.set(c.capsule, [...(approval.get(c.capsule) ?? []), a.detail]);
       }
     }
@@ -157,6 +198,8 @@ function checkPermissions(project: Project, unit: ChangeUnit, files: Classified[
       ),
       d.capsule,
     );
+  for (const g of gentle.values())
+    add(msg.W111(unit.label, actorLabel(actor), g.capsule, g.action, g.reason, g.what), null);
   for (const [capsule, what] of approval)
     add(msg.W108(unit.label, capsule, ownersOf(project.capsules, capsule), what), null);
 }
@@ -278,8 +321,84 @@ function oneRule(
 }
 
 /** New checks that arrived together with code changes: unreviewed until confirmed (C6.2). */
-function newChecksWithCode(files: Classified[]): string[] {
-  if (!files.some((c) => c.kind === "code")) return [];
+/** A unit made by an agent whose role is `drafter`: its new checks are starter checks (C18.6). */
+function isDrafter(project: Project, unit: ChangeUnit): boolean {
+  const a = unit.actor;
+  return a?.kind === "agent" && project.permissions.agents[a.name]?.role === "drafter";
+}
+
+/**
+ * An unreviewed item or a change needing approval, approved by an owner exactly as it is now
+ * (C18.4): `check node <addr>` / an address by its node hash, a path by its blob hash.
+ */
+function approvedNow(project: Project, item: string): boolean {
+  const addr = item.startsWith("check node ") ? item.slice(11) : item.includes("#") ? item : null;
+  if (addr)
+    return nodeApproved(project.approvals, addr, project.current.nodes.get(addr)?.hash ?? null);
+  const path = item.replace(/ \(lines added\)$/, "");
+  if (!project.approvals.files.has(path)) return false;
+  const blob =
+    hashObjects(
+      [path].filter((p) => project.tracked.includes(p) || existsOnDisk(project, p)),
+      project.root,
+    ).get(path) ?? null;
+  return fileApproved(project.approvals, path, blob);
+}
+
+const existsOnDisk = (project: Project, p: string) =>
+  existsSync(join(project.root, ...p.split("/")));
+
+/**
+ * C18.4: every commit that changes approvals.lock must be made by an owner of each capsule
+ * whose records it adds or changes, never by an agent (E033). In GitHub Actions the person
+ * is the pull request's author, as for Capsule-Cosmetic (D-013).
+ */
+function approvalOwners(project: Project, units: ChangeUnit[], contents: Contents, add: Add) {
+  const event = readGithubEvent();
+  const seen = new Set<string>();
+  for (const u of units) {
+    if (u.kind !== "commit") continue;
+    const f = u.files.find((x) => x.path === APPROVALS_FILE);
+    const c = u.commits[0];
+    if (!f || !c || seen.has(c.sha)) continue;
+    seen.add(c.sha);
+    const read = (rev: string | null) => {
+      const t = rev === null ? null : contents.get(rev, APPROVALS_FILE);
+      const p = t === null ? null : parseApprovals(t);
+      return p && p.ok ? p.approvals : emptyApprovals();
+    };
+    const items = changedRecords(read(f.beforeRev), read(f.status === "D" ? null : f.afterRev));
+    if (!items.length) continue;
+    const agent = trailer(c.trailers, "Capsule-Agent")[0];
+    const who: Actor = agent
+      ? { kind: "agent", name: agent }
+      : event
+        ? humanFromGithub(event.prAuthor, project.permissions)
+        : humanFromEmail(c.authorEmail, project.permissions);
+    const notOwned = items.filter(
+      (i) =>
+        !(
+          who.kind === "human" &&
+          isOwner(who.name, i.capsule, project.capsules, project.permissions)
+        ),
+    );
+    if (!notOwned.length) continue;
+    const label = `commit ${c.sha.slice(0, 7)} "${c.subject}"`;
+    const whoText =
+      who.kind === "human"
+        ? who.name
+        : who.kind === "agent"
+          ? `the agent ${who.name}`
+          : event
+            ? `the pull request author (${event.prAuthor ?? "unknown"})`
+            : actorLabel(who);
+    const owners = [...new Set(notOwned.flatMap((i) => ownersOf(project.capsules, i.capsule)))];
+    add(msg.E033(label, whoText, notOwned, owners), null);
+  }
+}
+
+function newChecksWithCode(files: Classified[], drafter = false): string[] {
+  if (!drafter && !files.some((c) => c.kind === "code")) return [];
   const out: string[] = [];
   for (const c of files) {
     if (c.kind === "check-file" && (c.status === "A" || c.additive))

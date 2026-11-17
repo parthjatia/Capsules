@@ -27,7 +27,7 @@ describe("capsules map (HTML)", () => {
     expect(r.status).toBe(0);
     expect(r.stdout).toContain("Wrote the capsules map: ");
     expect(r.stdout).toContain(".capsules/_cache/map.html");
-    expect(r.stdout).toContain("5 areas · 2 concerns · 9 rules · 0 stale · checks not run yet");
+    expect(r.stdout).toContain("5 areas · 3 concerns · 10 rules · 0 stale · checks not run yet");
     expect(existsSync(mapFile(dir))).toBe(true);
   });
 
@@ -64,7 +64,7 @@ describe("capsules map (HTML)", () => {
     const summary = page.indexOf('<p class="summary" id="summary">');
     expect(summary).toBeGreaterThan(0);
     expect(summary).toBeLessThan(page.indexOf('id="attention"'));
-    expect(page).toContain("5 areas · 2 concerns · 9 rules · 0 stale · checks not run yet</p>");
+    expect(page).toContain("5 areas · 3 concerns · 10 rules · 0 stale · checks not run yet</p>");
   });
 
   it("shows concerns as coloured tags on the areas they reach, linking to the concern", () => {
@@ -73,8 +73,8 @@ describe("capsules map (HTML)", () => {
       page.indexOf('id="cap-web"'),
       page.indexOf("</summary>", page.indexOf('id="cap-web"')),
     );
-    expect(web).toMatch(/<a class="tag t0" href="#con-payments">payments<\/a>/);
-    expect(web).toMatch(/<a class="tag t1" href="#con-pii">pii<\/a>/);
+    expect(web).toMatch(/<a class="tag t1" href="#con-payments">payments<\/a>/);
+    expect(web).toMatch(/<a class="tag t2" href="#con-pii">pii<\/a>/);
     expect(page).toContain('id="con-payments"');
   });
 
@@ -208,7 +208,7 @@ describe("capsules map --format mermaid / json", () => {
     const j = json(demoHistory());
     expect(j.format).toBe("0.1");
     expect(j.kind).toBe("map");
-    expect(j.summary.line).toBe("5 areas · 2 concerns · 9 rules · 0 stale · checks not run yet");
+    expect(j.summary.line).toBe("5 areas · 3 concerns · 10 rules · 0 stale · checks not run yet");
     const web = j.capsules.find((c: { id: string }) => c.id === "web");
     expect(web.related).toEqual(["payments", "pii"]);
     expect(j.attention).toEqual([

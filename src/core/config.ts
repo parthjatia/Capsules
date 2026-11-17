@@ -38,6 +38,8 @@ const ConfigSchema = z.strictObject({
   "one-rule": z
     .strictObject({ "new-checks-with-code": z.enum(["allow", "block"]).default("allow") })
     .default({ "new-checks-with-code": "allow" }),
+  // C18.5: gentle turns only scope and blocked-by refusals into warnings (W111).
+  mode: z.enum(["strict", "gentle"]).default("strict"),
   "weakened-tests": z.enum(["off", "warn", "block"]).default("warn"),
   "weakened-tests-patterns": z
     .strictObject({

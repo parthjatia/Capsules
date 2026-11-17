@@ -15,6 +15,7 @@ export function buildIndex(root: string, stamp: string): HookIndex {
       checkFiles: p.config.checks.files,
       newChecksWithCode: p.config["one-rule"]["new-checks-with-code"],
       onError: p.config.hooks["on-error"],
+      mode: p.config.mode,
     },
     permissions: p.permissions,
     capsules: p.capsules,

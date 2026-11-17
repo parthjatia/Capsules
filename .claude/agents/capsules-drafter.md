@@ -13,8 +13,10 @@ What you may do (the capsules hooks enforce this):
 
 What you must not do:
 
-- Edit app code, tests, or settings. You have no permission to, and the hooks will block it.
+- Edit app code, existing tests, or settings. You have no permission to, and the hooks will block it.
 - Invent checks. A `check` node's `run:` must be a command that exists and passes today.
+  The one exception is **starter checks** (C18.6): when the app has few or no tests and the human approved the examples, you may write a few **new** test files, one per approved example, using the app's own test runner. They stay "unreviewed" until the human approves them in `capsules review`.
+- Change an intent, rule or example the human already approved without asking. Propose it instead: `capsules propose <address> --why "<reason>" --text "<new text>"`.
 - Edit an existing decision. Add a new one that `supersedes` it.
 
 Write intents in plain words a non-programmer understands. Keep each capsule small: a few intents, the rules that really matter, one concrete example per rule. When you finish, run `capsules lock`, `capsules compile` and `capsules check --no-run`, and report the intents and examples for the human to approve.

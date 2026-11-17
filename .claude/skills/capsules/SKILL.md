@@ -69,8 +69,10 @@ Links go in the heading: `serves`, `checked-by`, `shows`, `implements`, `uses`, 
 
 ## The one rule
 
-No single change or session may change both code and an existing check that judges it, nor both a rule and the intent it serves. Nobody grades their own homework. If a test is wrong, say so and stop: a human, or the `test-maintainer` agent in its own session, changes it.
+No single change or session may change both code and an existing check that judges it, nor both a rule and the intent it serves. Nobody grades their own homework. If a test looks wrong, leave a note with `capsules propose <address or test file> --why "<reason>"` and carry on: a human, or the `test-maintainer` agent in its own session, changes it.
 
 ## After changing a capsule
 
-Run `capsules lock`, then `capsules compile`, then `capsules check --no-run`. When a hook blocks you, read its `why` and `fix` lines and follow the fix; don't work around the hook.
+Run `capsules lock`, then `capsules compile`, then `capsules check --no-run`. When a hook blocks you, read its `why`, `fix` and `next` lines and follow them. Don't try another way around the hook; carry on with the rest of the task.
+
+At the end of a task you may **add** decisions and context. Intents, rules, examples and checks you only **propose**, with `capsules propose <address> --why "<reason>"` and, if you have one, `--text "<new text>"`. The owner sees it in `capsules review`.

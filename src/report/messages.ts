@@ -265,6 +265,21 @@ export const msg = {
       "the app's behaviour depends on this prompt, so the rules about it may need re-checking.",
       `Re-check ${linked.length ? linked.join(", ") : "the contracts this prompt serves"}, then run \`capsules lock\` to record the new version.`,
     ),
+  W111: (
+    unit: string,
+    who: string,
+    capsule: string,
+    action: string,
+    reason: string,
+    what: string[],
+  ) =>
+    make(
+      "W111",
+      {},
+      `${unit}, by ${who}: ${action} in ${capsule} would be blocked in strict mode (${reason}): ${what.join(", ")}.`,
+      "gentle mode lets agents work outside their scope while you get used to capsules; strict mode would refuse this.",
+      "nothing to do now. When the warnings look right, run `capsules mode strict` in your own terminal.",
+    ),
   E009: (at: At, addr: string, how: "edited" | "deleted") =>
     make(
       "E009",
@@ -327,6 +342,29 @@ export const msg = {
       `${commit} carries "Capsule-Cosmetic: ${addr}", but ${who} doesn't own ${addr.split("#")[0]}.`,
       "a cosmetic mark clears every stale link to a node without review, so only an owner may declare it.",
       `Ask an owner of ${addr.split("#")[0]} (${owners.join(", ") || "none listed"}) to make that change, or remove the trailer and review each stale item with \`capsules refresh\`.`,
+    ),
+  E033: (
+    commit: string,
+    who: string,
+    items: { key: string; capsule: string }[],
+    owners: string[],
+  ) =>
+    make(
+      "E033",
+      { file: ".capsules/approvals.lock" },
+      `${commit} changes approvals.lock, but ${who} doesn't own ${[...new Set(items.map((i) => i.capsule))].join(", ")}: ${items
+        .map((i) => i.key)
+        .join(", ")}.`,
+      "an approval tells everyone an owner read and accepted a rule or a test; only an owner may give it.",
+      `Remove those lines from the commit, and ask an owner (${owners.join(", ") || "none listed"}) to run \`capsules review approve\` themselves.`,
+    ),
+  E034: (file: string, line: number, text: string) =>
+    make(
+      "E034",
+      { file, line },
+      `${file} can't be read: line ${line} doesn't match the approvals.lock format ("${text.slice(0, 60)}").`,
+      "if the approvals can't be read, nothing counts as approved, so every rule and test change looks unreviewed.",
+      "Restore the file from Git (`git checkout -- .capsules/approvals.lock`); only `capsules review approve` should write it.",
     ),
   E031: (at: At, addr: string, run: string, exit: string, output: string) =>
     make(
@@ -489,6 +527,9 @@ export const compileMsg = {
 };
 
 /** Messages the hooks print (C11). Claude reads a block reason as the reason it can't proceed. */
+const KEEP_GOING =
+  'don\'t try another way around this block. Carry on with the rest of the task. If a test or rule looks wrong, leave a note for an owner: capsules propose <address or test file> --why "<reason>".';
+
 export const hookMsg = {
   blocked: (code: string, what: string, lines: [string, string][], why: string, fix: string) =>
     [
@@ -496,18 +537,26 @@ export const hookMsg = {
       ...lines.map(([k, v]) => `  ${(k + ":").padEnd(9)}${v}`),
       `  why:     ${why}`,
       `  fix:     ${fix}`,
+      `  next:    ${KEEP_GOING}`,
     ].join("\n") + "\n",
+  /** C18.7 (D-036): every block ends with how to carry on. */
+  keepGoing: KEEP_GOING,
+  sessionStarted: (id: string, agent: string, role: string, scope: string[], reopened: boolean) =>
+    `capsules: ${reopened ? "continuing" : "opened"} session ${id} for this Claude Code session, as ${agent} (role ${role}, capsules ${scope.join(", ")}).\n` +
+    'Before changing a file, run `capsules explain <file>`. Never weaken an existing test; if one looks wrong, run `capsules propose <test file> --why "<reason>"` and carry on.\n',
+  sessionNoDefault: () =>
+    "capsules: permissions.yaml has no `default` agent, so no session was opened. Edits are checked as `default` and will be refused until it is added.\n",
   notAllowedWhy:
     "permissions.yaml says who may change what, so an agent can't change parts it has no business touching.",
   notAllowedFix: (action: string) =>
     action === "change-checks"
-      ? "leave existing tests as they are and fix the code instead. If the test itself is wrong, say so and stop: a human, or the test-maintainer agent in its own session, can change it."
+      ? "leave existing tests as they are and fix the code instead. If the test itself looks wrong, propose a change (capsules propose <test file> --why ...): a human, or the test-maintainer agent in its own session, can change it."
       : action === "edit-config" || action === "edit-permissions"
         ? "don't change this file; ask a human owner to make the change."
         : `ask a human owner, or an agent whose role and scope include ${action}, to make this change.`,
   v1Why: "an agent could make a test pass by weakening the test.",
   v1Fix:
-    "don't change the test in this session. Fix the code so the existing test passes. If the test is wrong, say so: the test-maintainer agent can change it in a separate session, with owner approval.",
+    "don't change the test in this session. Fix the code so the existing test passes. If the test is wrong, propose a change (capsules propose <test file> --why ...): the test-maintainer agent can change it in a separate session, with owner approval.",
   v2Why:
     "a rule can be made to fit by quietly rewriting the reason it exists, and no one would see the drift.",
   v2Fix:
@@ -525,6 +574,12 @@ export const hookMsg = {
     "capsules can only check edits made with the Edit and Write tools; shell writes to protected files skip those checks.",
   bashFix:
     "make the change with the Edit or Write tool so capsules can check it, or ask a human to make it.",
+  humansOnlyWhy:
+    "approving a rule or a test, removing a proposal and switching the mode are an owner's decisions; an agent can't make them.",
+  humansOnlyFix:
+    "tell the user what you'd like approved; they run `capsules review` and approve it in their own terminal.",
+  gentle: (what: string) =>
+    `capsules (gentle mode, W111): allowed, but strict mode would block this: ${what}. Run \`capsules mode\` to see the list.`,
   approval: (what: string) =>
     `capsules: ${what}. An owner must approve this change in the pull request (W108).`,
   crashed: (detail: string, open: boolean) =>
@@ -535,6 +590,122 @@ export const hookMsg = {
 };
 
 /** `capsules map` (C14). */
+/** `capsules mode` (C18.5). */
+export const modeMsg = {
+  show: (mode: string, log: { date: string; agent: string; file: string; reason: string }[]) => {
+    const head =
+      mode === "gentle"
+        ? "capsules mode: gentle. Agents working outside their scope, or on a concern they are barred from, only get a warning (W111). Everything else is blocked as in strict mode."
+        : "capsules mode: strict. Every permission problem is blocked.";
+    if (!log.length)
+      return `${head}\nOn this machine, nothing would have been blocked by strict mode yet.\n`;
+    const shown = log.slice(-20);
+    return (
+      `${head}\n\nWhat strict mode would have blocked on this machine (${log.length}${log.length > 20 ? `, last 20 shown` : ""}):\n` +
+      shown.map((e) => `  ${e.date}  ${e.agent}  ${e.file}: ${e.reason}`).join("\n") +
+      "\n\nTo switch, run in your own terminal: capsules mode strict\n"
+    );
+  },
+  bad: (v: string) =>
+    `"${v}" is not a mode.\n  fix: use capsules mode strict, or capsules mode gentle.`,
+  already: (m: string) => `capsules mode is already ${m}. Nothing changed.\n`,
+  couldNotSet: () =>
+    "capsules couldn't change the mode line in .capsules/config.yaml safely, so nothing was written.\n  fix: set `mode: strict` (or gentle) in that file by hand.",
+  set: (was: string, now: string, logged: number, dry: boolean) =>
+    `${dry ? "Would set" : "Set"} mode: ${now} in .capsules/config.yaml (was ${was}).` +
+    (now === "strict" && logged
+      ? ` The ${logged} change${logged === 1 ? "" : "s"} listed by \`capsules mode\` would now be blocked.`
+      : "") +
+    "\nCommit .capsules/config.yaml yourself: only an owner may change it (edit-config).\n",
+};
+
+/** `capsules review` (C18.4). */
+export const reviewMsg = {
+  humansOnly: (cmd: string) =>
+    `error  ${cmd} is for humans, and this looks like an agent's shell (CAPSULES_SESSION or CLAUDECODE is set).\n` +
+    "  why:  an approval tells everyone an owner read and accepted the change; an agent can't give it.\n" +
+    "  fix:  run it in your own terminal, outside Claude Code. CI also checks that an owner made the commit (E033).\n",
+  approveWhat: () =>
+    "error  Say what to approve: capsules review approve r1 r2 …, or --routine for the routine items.\n  fix:  run `capsules review` to see the items and their ids.\n",
+  reviewFirst: () =>
+    "error  Run `capsules review` first, so you approve exactly what you have read.\n",
+  unknownId: (id: string) =>
+    `${id}: no such item in the last \`capsules review\`. Run it again to see the ids.`,
+  gone: (id: string, key: string) =>
+    `${id}: ${key.replace(/^\w+ /, "")} isn't waiting any more (already approved, or the change was undone).`,
+  changedSince: (id: string, title: string) =>
+    `${id}: "${title}" changed after you reviewed it, so it was not approved. Run \`capsules review\` and read it again.`,
+  approved: (
+    done: string[],
+    problems: string[],
+    approvals: boolean,
+    lock: boolean,
+    notMine: string[],
+    dry: boolean,
+    next: string[] = [],
+  ) => {
+    const out: string[] = [];
+    if (done.length)
+      out.push(`${dry ? "Would approve" : "Approved"}:`, ...done.map((d) => `  ${d}`));
+    if (problems.length)
+      out.push(...(done.length ? [""] : []), "Not approved:", ...problems.map((p) => `  ${p}`));
+    const files = [
+      approvals ? ".capsules/approvals.lock" : "",
+      lock ? ".capsules/capsules.lock" : "",
+    ].filter(Boolean);
+    if (files.length && !dry)
+      out.push(
+        "",
+        `Commit ${files.join(" and ")} yourself (not from an agent): CI checks that an owner made that commit (E033).`,
+      );
+    if (notMine.length)
+      out.push(
+        "",
+        `Note: your Git email isn't an owner of ${notMine.join(", ")} in permissions.yaml, so CI will reject this approval (E033).`,
+      );
+    if (next.length) out.push("", ...next);
+    return out.join("\n") + "\n";
+  },
+  updateFirst: (rule: string, update: string[], others: number) => {
+    const more = update.length - 1 + others;
+    return (
+      `Next: ask the drafter to update ${update[0]}${more ? ` (and ${more} other${more === 1 ? "" : "s"})` : ""} first, to match ${rule}.\n` +
+      "  Then run `capsules review` again: each one shows the new rule next to what it says, for you to approve."
+    );
+  },
+  noProposal: (id: string) =>
+    `error  There is no proposal ${id}.\n  fix:  run \`capsules review\` to see the open proposals and their names.\n`,
+  removed: (file: string, dry: boolean) =>
+    `${dry ? "Would remove" : "Removed"} ${file}. Commit that yourself; CI checks an owner removed it.\n`,
+};
+
+/** `capsules propose` and proposal files (C18.3). */
+export const proposalMsg = {
+  needsWhy: () =>
+    'capsules propose needs a reason.\n  fix: add --why "<what looks wrong and why>", e.g. capsules propose tests/invoices/refunds.test.js --why "it expects the old refund limit".',
+  readOnlyRole: (agent: string, role: string) =>
+    `${agent} (role ${role}) is read-only, so it can't leave proposals.\n  fix: report what you found in your answer instead.`,
+  unknownCapsule: (id: string) =>
+    `There is no capsule "${id}".\n  fix: run \`capsules status\` to see the capsules, or name a file instead.`,
+  newNeedsText: (addr: string) =>
+    `${addr} doesn't exist yet, so a proposal for it needs the text.\n  fix: add --text "<the new rule, intent or example>".`,
+  unknownTarget: (t: string) =>
+    `"${t}" is neither an address (capsule#node) nor a file in this project.\n  fix: name a rule like billing#C1, or a test file like tests/invoices/refunds.test.js.`,
+  wrote: (file: string, target: string, kind: string, dry: boolean) =>
+    `${dry ? "Would write" : "Wrote"} ${file} (${kind === "note" ? "a note" : kind === "new" ? "a proposed new item" : "a proposed change"} for ${target}).\n` +
+    "Nothing else changed. An owner sees it in `capsules review`; carry on with the rest of the task.\n",
+  unreadable: (file: string, why: string) => `The proposal ${file} can't be read: ${why}.`,
+  unreadableWhy: "a proposal no one can read can't be reviewed.",
+  unreadableFix:
+    "fix the file (front matter with target and kind, then a `## why` section), or remove it with `capsules review done <proposal>`.",
+  waiting: (target: string, kind: string, by: string) =>
+    `${kind === "note" ? "A note" : "A proposal"} about ${target} from ${by} is waiting for an owner.`,
+  waitingWhy:
+    "an agent thinks a rule, an intent or a test should change, and only an owner can decide.",
+  waitingFix: (id: string) =>
+    `run \`capsules review\` to read it. Apply it or not, then remove it with \`capsules review done ${id}\`.`,
+};
+
 export const mapMsg = {
   wrote: (path: string, summary: string, opening: boolean) =>
     `Wrote the capsules map: ${path}\n  ${summary}\n` +

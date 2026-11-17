@@ -351,6 +351,7 @@ For each capsule `X` in a change unit:
 
 - **V1, code and its judge.** The unit touches implementation files whose home is `X`, or which a concern `K` covers. It also **modifies or deletes an existing check** that judges `X`: a check node in `X` or in `K`, a check linked by `checked-by` from `X`'s contracts, or an existing check file covered by `X`.
   - Adding new checks is not a violation (`one-rule.new-checks-with-code: allow`), but new checks are marked "unreviewed" until a human or a separate session confirms them. Starter checks written by a `drafter` session are unreviewed too (C18.6). An owner's approval in `approvals.lock` (C18.4) clears the mark.
+  - **Existing** means it existed at the base (C6.4), in every change unit: a test file added earlier in the same branch counts as new, as the hooks already treat a file created in the session (D-024, D-038). It stays unreviewed and is shown in full in `capsules review`.
 - **V2, rule and its reason.** The unit changes a contract or example in `X` and also changes an intent that contract `serves`.
 - V1 is reported as `E028` and V2 as `E029`.
 - **Solo mode never relaxes V1 or V2.**

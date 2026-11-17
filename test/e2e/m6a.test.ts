@@ -608,6 +608,35 @@ capsules mode shows that list; capsules mode strict changes the line." > msg.txt
   });
 });
 
+describe("a test file added earlier in the branch counts as new (D-038)", () => {
+  it("changing it alongside code is allowed and it stays unreviewed; a test from the base is still protected", () => {
+    const dir = demoHistory();
+    const NEW = "tests/invoices/limits.test.js";
+    writeFileSync(
+      join(dir, ...NEW.split("/")),
+      'import assert from "node:assert/strict";\nassert.equal(1, 1);\nassert.equal(2, 2);\n',
+    );
+    commit(dir, "a new test", agentTrailers());
+    editFile(dir, "src/billing/invoices/refund.js", "", "// change\n");
+    editFile(dir, NEW, "assert.equal(2, 2);\n", "");
+    commit(dir, "code, and the branch-new test changed", agentTrailers());
+    const ok = cli(dir, {}, "check", "--no-run", "--base", "main");
+    expect(ok.stdout).not.toContain("E028");
+    expect(ok.stdout).not.toContain("E027");
+    expect(ok.stdout).toMatch(/unreviewed new checks[\s\S]*tests\/invoices\/limits\.test\.js/);
+    // Control: the same kind of change to a test that existed at the base is V1.
+    editFile(dir, "src/billing/invoices/refund.js", "// change\n", "// again\n");
+    editFile(
+      dir,
+      "tests/invoices/refunds.test.js",
+      "  assert.throws(() => refund(invoice, 901), /exceeds/);\n",
+      "",
+    );
+    commit(dir, "code and an existing test", agentTrailers());
+    expect(cli(dir, {}, "check", "--no-run", "--base", "main").stdout).toContain("error E028");
+  });
+});
+
 describe("end-of-task fast checks (C18.2)", () => {
   const stop = (dir: string) => {
     const r = hook(dir, "stop", { hook_event_name: "Stop", session_id: "s" });

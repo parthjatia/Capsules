@@ -365,3 +365,13 @@ Newest at the bottom. Entries are never edited, only superseded by a later entry
 - **Changes:** Part E, Part I4
 - **Decision:** M6a is the zero-friction set (C18), built in the order 1, 7, 6, 4, 5, 2, 3, plus the work already on the `m6` branch: the pre-bash fix, the partner package, and the GitHub Action with the sticky summary. M6b is the release workflow, the README, the demo repo, the 45-second demo script, and the partner package rebuilt with M6a.
 - **Also recorded (I4):** the commit-msg hook stays opt-in (`--git-hooks`). The demo concerns are auth, payments and pii; Parth will ask the design partners which matter most.
+
+## D-038: A test file added earlier in the branch counts as new for the one rule
+
+- **Date:** 2026-11-17 · **Approved by:** Parth
+- **Changes:** C6.2
+- **Why:** dogfooding M6a, the guard flagged Claude's own commit `d92cc0f`. It changed code and widened the import line of `test/e2e/m6a.test.ts`, a test file created one commit earlier in the same branch (E027 + E028). The live hook had allowed it, because the file was created in that session (D-024). CI judged each commit on its own and counted the file as existing. The hook and CI disagreed.
+- **Decision:** a check file counts as **existing** only if it existed at the base (C6.4), in every change unit, so CI agrees with the hooks. A test file added since the base counts as new: changing it alongside code is not V1 and needs only `add-checks`. Tests that existed at the base keep full protection.
+- **Interpretations:**
+  1. Such a file is still "unreviewed" until an owner approves it, and `capsules review` shows it in full at its final version, so a test weakened before anyone reviewed it is still in front of the human.
+  2. This applies to check **files**. Check **nodes** in capsule files are unchanged: changing an existing `check` node still needs `change-checks`.

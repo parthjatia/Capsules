@@ -72,9 +72,23 @@ export function guard(project: Project, base: Base, units: ChangeUnit[]): GuardR
     out.push(d);
   };
 
+  // D-038: a check file is "existing" only if it existed at the base, in every unit, as the
+  // hooks treat a file created in the session (D-024). A branch-new one stays unreviewed.
+  const baseRev = rangeBase(project, base);
+  const branchNew = (c: Classified): Classified =>
+    c.kind === "check-file" &&
+    c.status !== "A" &&
+    baseRev !== null &&
+    contents.get(baseRev, c.path) === null
+      ? {
+          ...c,
+          additive: true,
+          actions: [{ action: "add-checks", detail: `check file new in this branch ${c.path}` }],
+        }
+      : c;
   const classified = units.map((u) => ({
     unit: u,
-    files: u.files.map((f) => classify(f, project, contents, isCheckFile)),
+    files: u.files.map((f) => branchNew(classify(f, project, contents, isCheckFile))),
   }));
 
   // Permissions (C5.2), per commit and for uncommitted changes.

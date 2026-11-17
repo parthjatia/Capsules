@@ -208,3 +208,44 @@ describe("other names for the same test file (M6h red-team findings)", () => {
     expect(h.status).toBe(2);
   });
 });
+
+describe("a YAML alias bomb in a capsule (M6h security scan)", () => {
+  // A few lines that would expand to 9^10 values. The yaml library refuses it by throwing.
+  const bomb = () => {
+    let y = '---\ntitle: T\na0: &a0 ["x","x","x","x","x","x","x","x","x"]\n';
+    for (let i = 1; i < 10; i++)
+      y += `a${i}: &a${i} [${Array(9)
+        .fill(`*a${i - 1}`)
+        .join(",")}]\n`;
+    return y + "---\n\n# T\n";
+  };
+
+  it("is reported as E008 by check, not a crash", () => {
+    const dir = demoHistory();
+    writeFileSync(join(dir, ".capsules", "web.md"), bomb());
+    const r = cli(dir, "check", "--no-run");
+    expect(r.status).toBe(1);
+    expect(r.stdout).toMatch(/E008[\s\S]*can't be read/);
+    expect(r.stderr).not.toContain("internal error");
+  });
+
+  it("doesn't crash the edit hook, so a test edit is still blocked", () => {
+    const dir = demoHistory();
+    writeFileSync(join(dir, ".capsules", "web.md"), bomb());
+    const h = rawHook(
+      dir,
+      removeAssert(dir, "yb", join(dir, "tests", "invoices", "refunds.test.js")),
+    );
+    expect(h.stderr).not.toContain("hook failed");
+    expect(h.status).toBe(2);
+    expect(h.stderr).toContain("(E027)");
+  });
+
+  it("in config.yaml is E022, not a crash", () => {
+    const dir = demoHistory();
+    writeFileSync(join(dir, ".capsules", "config.yaml"), bomb().split("---\n")[1]!);
+    const r = cli(dir, "check", "--no-run");
+    expect(r.stdout).toMatch(/E022[\s\S]*can't be read/);
+    expect(r.stderr).not.toContain("internal error");
+  });
+});

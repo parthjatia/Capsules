@@ -3,6 +3,7 @@
 import { existsSync, readFileSync, writeFileSync } from "node:fs";
 import { join } from "node:path";
 import { parseDocument } from "yaml";
+import { toJsSafe } from "../../core/yaml-safe.js";
 import { findProjectRoot, loadProject, UsageError } from "../../core/project.js";
 import { readGentle } from "../../hooks/session.js";
 import { toJson } from "../../report/json.js";
@@ -42,7 +43,8 @@ export function mode(
     : /^format:.*$/m.test(text)
       ? text.replace(/^(format:.*)$/m, `$1\nmode: ${value}`)
       : `mode: ${value}\n${text}`;
-  if ((parseDocument(next).toJS() as { mode?: string } | null)?.mode !== value)
+  const js = toJsSafe(parseDocument(next));
+  if (!js.ok || (js.value as { mode?: string } | null)?.mode !== value)
     throw new UsageError(modeMsg.couldNotSet());
   if (!opts.dryRun) writeFileSync(file, next);
   if (opts.json) io.out(toJson("mode", { mode: value, was: now, dryRun: !!opts.dryRun }));

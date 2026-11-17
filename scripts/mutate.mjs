@@ -23,6 +23,7 @@ if (!copy) {
   process.exit(64);
 }
 const perFile = Number(opt("--per-file", "12"));
+const workers = Number(opt("--workers", "4")); // few: this machine may be short of memory
 let seed = Number(opt("--seed", "1"));
 const rand = () => (seed = (seed * 1103515245 + 12345) % 2147483648) / 2147483648;
 
@@ -150,6 +151,7 @@ const test = () =>
       join(copy, "node_modules", "vitest", "vitest.mjs"),
       "run",
       "--bail=1",
+      `--maxWorkers=${workers}`,
       "--reporter=dot",
       ...TESTS,
     ],

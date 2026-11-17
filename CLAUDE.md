@@ -899,6 +899,7 @@ Each milestone must be a finished, demoable product. **Don't start the next mile
 | M5 | Map | HTML, Mermaid and JSON formats | Open `map.html`: the tree, concerns and a working file search |
 | M6a | Zero friction | Automatic sessions, keep-going block messages, `propose`, `review` and `approvals.lock`, gentle mode, starter checks, end-of-task fast checks (C18); the GitHub Action with the sticky summary; the partner package | Start Claude Code in the demo: a session opens by itself; a blocked edit says how to carry on; `capsules review` lists what waits for you |
 | M6b | Ship v0.1.0 | Release workflow, README, demo repo, a 45-second demo script, partner package rebuilt | Parth approves → tag `v0.1.0` (never without his OK) |
+| M6h | Hardening (D-043) | Coverage, mutation testing, property tests, 20 real repos, simulated users and a red team in headless Claude Code, security scans, edge cases, spec audit, README test; findings fixed or listed for Parth in `docs/HARDENING.md` | Read `docs/HARDENING.md`; decide the open proposals; then the `v0.1.0` tag |
 
 **First real test after M4:** install on Parth's own app and two design partners' repos for two weeks. Track:
 

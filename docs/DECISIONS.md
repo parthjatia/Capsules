@@ -407,3 +407,31 @@ Newest at the bottom. Entries are never edited, only superseded by a later entry
 - **Changes:** `docs/proposed-workflows/release.yml` only; no spec change
 - **Why:** the version is now `0.1.0-rc.2`. If a pre-release tag were ever pushed, a plain `npm publish` would make the test version what `npx @pyscoparth/capsules` installs by default (or npm 11 would refuse it).
 - **Decision:** the release workflow publishes a version with a `-` (pre-release) under the `next` tag, and a plain version (`0.1.0`) as usual. It still refuses while `package.json` is `private`, and still only runs on a tag Parth pushes.
+
+## D-043: M6h, a hardening milestone before v0.1.0
+
+- **Date:** 2026-11-17 · **Approved by:** Parth ("Start M6h, the hardening milestone")
+- **Changes:** Part E gains M6h between M6b and the v0.1.0 tag; no spec change
+- **Why:** before anyone outside relies on the guard, test it the way it will be attacked and used: coverage, planted bugs (mutation testing), random inputs (property tests), 20 real open-source repos, simulated users and a red team in headless Claude Code, security scans, edge cases, a spec audit and a README test.
+- **Decision:** results go to `docs/HARDENING.md` in plain words. The tools stay in the repo so every check can be run again: `npm run coverage`, `npm run try:repos`, `npm run mutate`, `npm run simulate`, and `test/unit/properties.test.ts`. New development tools only: `c8` (coverage across the CLI processes the tests start) and `fast-check` (property tests). Nothing users install changes.
+
+## D-044: The edit hook judges a file by its real path
+
+- **Date:** 2026-11-17 · **Approved by:** Claude (M6h; implements C5.2 and C11 as written, no spec change)
+- **Why:** the M6h edge-case tests found two ways to edit an existing test without the hook seeing a test: a Windows short (8.3) path (`C:\Users\...\CAPSUL~1\tests\...`) and a symlink with a code-like name pointing at the test. They also found that hook input starting with a byte-order mark (Windows PowerShell adds one when piping) crashed the hook, and with `hooks.on-error: open` a crash lets the edit through.
+- **Decision:** before classifying, the edit hook resolves the file to its real path on disk (short names expanded, letter case as stored, symlinks followed; parts that don't exist yet are kept as given). It ignores a leading byte-order mark in its input. A hard link is still a separate name the hook can't connect to the test; creating one with `ln` is blocked by `pre-bash`, and CI sees the test change (I1).
+
+## D-045: How `capsules impact` and `capsules why` read the graph
+
+- **Date:** 2026-11-17 · **Approved by:** Claude (M6h spec audit; C15 listed both commands but they were never built)
+- **Changes:** none to the spec; this records how the one-line descriptions in C15 are read
+- **Decision:**
+  1. `impact <address>` lists every node that links to the node, then every node that links to those, nearest first, with the link type and what each one links to. Transclusions count, as everywhere (C2.5). It also lists the files those nodes name (code paths, a check's `files`, a prompt's `file`).
+  2. `why <address>` shows what the node serves, shows or implements (its reason one level up), then the decisions that serve it or serve that reason. Each decision comes with its rejected options, the assumptions it rests on (with review-by dates), and the older decisions it replaced. Replaced decisions are listed last and marked.
+  3. Both are read-only, support `--json`, and exit `64` for an address that isn't one, names no node, or is cross-repo (`E015`, C2.2).
+
+## D-046: YAML that expands too much is "can't be read", not a crash
+
+- **Date:** 2026-11-17 · **Approved by:** Claude (M6h security scan; no spec change)
+- **Why:** a capsule or settings file with a YAML alias bomb (a few lines that would expand to millions of values) made the yaml library throw while converting, and capsules crashed. In the hooks a crash allows the edit (`hooks.on-error: open`), and every hook reads every capsule, so one such file let every later edit through.
+- **Decision:** that refusal is reported like any unreadable YAML: `E008` in a capsule's front matter, `E022` in `config.yaml` or `permissions.yaml`. The front-matter hash of such a capsule is the hash of its normalised text, so it stays deterministic.

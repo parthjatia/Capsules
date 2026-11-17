@@ -5,6 +5,7 @@ import remarkFrontmatter from "remark-frontmatter";
 import remarkParse from "remark-parse";
 import { unified } from "unified";
 import { parseDocument } from "yaml";
+import { toJsSafe } from "./yaml-safe.js";
 import { z } from "zod";
 import { CAPSULE_ID_RE, parseAddress } from "./address.js";
 import {
@@ -179,7 +180,12 @@ function readFront(
     );
     return null;
   }
-  const parsed = FrontSchema.safeParse(doc.toJS() ?? {});
+  const js = toJsSafe(doc);
+  if (!js.ok) {
+    diagnostics.push(msg.E008({ file, line: 1 }, `the YAML can't be read (${js.message})`));
+    return null;
+  }
+  const parsed = FrontSchema.safeParse(js.value ?? {});
   if (!parsed.success) {
     diagnostics.push(msg.E008({ file, line: 1 }, describeZodIssues(parsed.error)));
     return null;

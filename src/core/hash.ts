@@ -47,7 +47,13 @@ export function nodeAddress(node: CapsuleNode): string {
 /** C7.1 step 5 (D-012): SHA-256 of the RFC 8785 form of the parsed front matter. */
 export function capsuleHash(frontMatterYaml: string): string {
   const text = frontMatterYaml.replace(/\r\n?/g, "\n").normalize("NFC");
-  const value: unknown = parseYaml(text, { version: "1.2" }) ?? {};
+  let value: unknown;
+  try {
+    value = parseYaml(text, { version: "1.2" }) ?? {};
+  } catch {
+    // Unreadable front matter is reported as E008; its hash is still deterministic.
+    return sha12(normaliseText(text));
+  }
   return sha12(jcs(value));
 }
 

@@ -1,6 +1,7 @@
 // .capsules/config.yaml (C4). Missing keys take the C4 defaults; unknown keys are errors,
 // because a typo in a protection setting must never silently weaken it.
 import { parseDocument } from "yaml";
+import { toJsSafe } from "./yaml-safe.js";
 import { z } from "zod";
 import { msg, type Diagnostic } from "../report/messages.js";
 
@@ -97,7 +98,12 @@ export function readYaml(text: string, file: string, diagnostics: Diagnostic[]):
     );
     return undefined;
   }
-  return doc.toJS() ?? {};
+  const js = toJsSafe(doc);
+  if (!js.ok) {
+    diagnostics.push(msg.E022({ file, line: 1 }, `the YAML can't be read (${js.message})`));
+    return undefined;
+  }
+  return js.value ?? {};
 }
 
 export function parseConfig(text: string | null, file: string, diagnostics: Diagnostic[]): Config {

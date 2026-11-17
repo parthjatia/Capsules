@@ -49,7 +49,9 @@ export async function runHook(args: string[], io: HookIo = processHookIo()): Pro
       );
       return 64;
     }
-    const raw = io.stdin();
+    // A byte-order mark (Windows PowerShell adds one when piping) must not crash the hook:
+    // with on-error: open, a crash lets the edit through (M6h).
+    const raw = io.stdin().replace(/^\uFEFF/, "");
     const input = (raw.trim() ? JSON.parse(raw) : {}) as HookInput;
     const root = findRoot(input.cwd ?? io.cwd);
     if (!root) return 0; // not a capsules project: nothing to guard

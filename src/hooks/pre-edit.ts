@@ -1,8 +1,8 @@
 // `capsules hook pre-edit` (C11): simulate an Edit/Write/MultiEdit/NotebookEdit, classify it
 // (C5.2), check permissions, and apply the one rule within the session (C6.2, D-024).
 import { isProposalPath, proposalCapsule } from "../core/proposal-path.js";
-import { existsSync, readFileSync } from "node:fs";
-import { isAbsolute, relative, resolve, sep } from "node:path";
+import { existsSync, readFileSync, realpathSync } from "node:fs";
+import { basename, dirname, isAbsolute, join, relative, resolve, sep } from "node:path";
 import picomatch from "picomatch";
 import { agentMay, gentleRelaxes, settingsAction, type Action } from "../core/access.js";
 import { recordGentle } from "./session.js";
@@ -74,9 +74,29 @@ export function simulate(
   return undefined; // NotebookEdit and anything else: the result isn't simulated
 }
 
+/**
+ * The file's real path: Windows short (8.3) names expanded, letter case as on disk, and
+ * symlinks followed, so `C:\PROGRA~1\…\TESTS\x.test.js` or a link to a test is judged as
+ * the test it really is (M6h). Parts that don't exist yet are kept as given.
+ */
+function realPath(abs: string): string {
+  const rest: string[] = [];
+  let p = abs;
+  for (;;) {
+    try {
+      return join(realpathSync.native(p), ...rest.reverse());
+    } catch {
+      const parent = dirname(p);
+      if (parent === p) return abs;
+      rest.push(basename(p));
+      p = parent;
+    }
+  }
+}
+
 function toProjectPath(root: string, cwd: string, file: string): string | null {
-  const abs = isAbsolute(file) ? file : resolve(cwd, file);
-  const rel = relative(root, abs);
+  const abs = realPath(isAbsolute(file) ? file : resolve(cwd, file));
+  const rel = relative(realPath(root), abs);
   if (rel === "" || rel.startsWith("..") || isAbsolute(rel)) return null;
   return rel.split(sep).join("/");
 }

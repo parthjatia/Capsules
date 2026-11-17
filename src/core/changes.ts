@@ -5,9 +5,11 @@ import {
   commitsSince,
   configuredEmail,
   fileAt,
+  filesAtRev,
   revParse,
   WORKTREE,
   type ChangeStatus,
+  type PathChange,
   type Commit,
 } from "../git/history.js";
 import type { Base } from "./base.js";
@@ -56,6 +58,13 @@ export class Contents {
     if (!this.cache.has(key)) this.cache.set(key, fileAt(rev, path, this.root));
     return this.cache.get(key)!;
   }
+  /** Read many files at one commit in a single git call, so later `get`s are cached. */
+  prefetch(rev: string, paths: string[]): void {
+    if (rev === WORKTREE) return;
+    const todo = paths.filter((p) => !this.cache.has(`${rev}\0${p}`));
+    if (todo.length < 2) return;
+    for (const [p, text] of filesAtRev(rev, todo, this.root)) this.cache.set(`${rev}\0${p}`, text);
+  }
 }
 
 /** Merge several commits' changes per path: before = first commit's parent, after = last commit. */
@@ -80,6 +89,12 @@ function mergeFiles(perCommit: { commit: Commit; files: UnitFile[] }[]): UnitFil
   }
   return out.sort((a, b) => (a.path < b.path ? -1 : 1));
 }
+
+/**
+ * The working tree's changes versus HEAD, as `changeUnits` found them for this base, so
+ * `guard` doesn't ask git again when the base is HEAD (one git process is ~70 ms on Windows).
+ */
+export const worktreeChanges = new WeakMap<Base, { rev: string; changes: PathChange[] }>();
 
 /**
  * C6.1: one unit per commit; one per `Capsule-Session` with several commits; one for all
@@ -138,11 +153,14 @@ export function changeUnits(project: Project, base: Base): ChangeUnit[] {
     });
   }
 
-  if (revParse("HEAD", root)) {
-    const files = changesSince("HEAD", root).map((p) => ({
+  const head = base.head !== undefined ? base.head : revParse("HEAD", root);
+  if (head) {
+    const changes = changesSince(head, root);
+    worktreeChanges.set(base, { rev: head, changes });
+    const files = changes.map((p) => ({
       path: p.path,
       status: p.status,
-      beforeRev: p.status === "A" ? null : "HEAD",
+      beforeRev: p.status === "A" ? null : head,
       afterRev: WORKTREE,
     }));
     if (files.length) {

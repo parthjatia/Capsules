@@ -13,6 +13,7 @@ import {
   checkGlobs,
   classify,
   Contents,
+  worktreeChanges,
   diffCapsule,
   type ChangeUnit,
   type Classified,
@@ -117,7 +118,8 @@ export function guard(project: Project, base: Base, units: ChangeUnit[]): GuardR
   }
 
   const from = rangeBase(project, base);
-  const range = from ? changesSince(from, project.root) : [];
+  const known = worktreeChanges.get(base);
+  const range = !from ? [] : known?.rev === from ? known.changes : changesSince(from, project.root);
   if (from) {
     appendOnly(project, from, contents, add);
     weakenedTests(project, from, range, contents, isCheckFile, add);
@@ -414,7 +416,12 @@ function newChecksWithCode(files: Classified[], drafter = false): string[] {
 
 function capsulesAt(project: Project, rev: string, contents: Contents): Capsule[] {
   const out: Capsule[] = [];
-  for (const path of filesAt(rev, ".capsules", project.root)) {
+  const paths = filesAt(rev, ".capsules", project.root);
+  contents.prefetch(
+    rev,
+    paths.filter((p) => capsuleFromPath(p)),
+  );
+  for (const path of paths) {
     const cap = capsuleFromPath(path);
     const text = cap ? contents.get(rev, path) : null;
     if (cap && text !== null) out.push(parseCapsuleFile(text, path, cap.id, cap.kind).capsule);

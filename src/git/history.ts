@@ -156,6 +156,48 @@ export function fileAt(rev: string | null, path: string, cwd: string): string | 
   return tryGit(["show", `${rev}:./${path}`], cwd);
 }
 
+/**
+ * Several files' text at one commit with a single `git cat-file --batch` (one process instead
+ * of one per file; each git process costs ~70 ms on Windows). Missing files map to null.
+ * Paths with a newline can't go through the batch protocol and are read one by one.
+ */
+export function filesAtRev(rev: string, paths: string[], cwd: string): Map<string, string | null> {
+  const out = new Map<string, string | null>();
+  const batch = paths.filter((p) => !/[\r\n]/.test(p));
+  for (const p of paths) if (/[\r\n]/.test(p)) out.set(p, fileAt(rev, p, cwd));
+  if (batch.length === 0) return out;
+  const r = spawnSync("git", ["cat-file", "--batch"], {
+    cwd,
+    input: batch.map((p) => `${rev}:./${p}\n`).join(""),
+    maxBuffer: 256 * 1024 * 1024,
+    windowsHide: true,
+  });
+  if (r.error || r.status !== 0) {
+    for (const p of batch) out.set(p, fileAt(rev, p, cwd));
+    return out;
+  }
+  const buf = r.stdout;
+  let at = 0;
+  for (const p of batch) {
+    const nl = buf.indexOf(10, at);
+    if (nl < 0) {
+      out.set(p, fileAt(rev, p, cwd)); // shouldn't happen; stay correct if it does
+      continue;
+    }
+    const head = buf.subarray(at, nl).toString("utf8").split(" ");
+    at = nl + 1;
+    // `<oid> <type> <size>` then the content and a newline, or `<name> missing`.
+    if (head.length !== 3 || !/^\d+$/.test(head[2]!)) {
+      out.set(p, null);
+      continue;
+    }
+    const size = Number(head[2]);
+    out.set(p, head[1] === "blob" ? buf.subarray(at, at + size).toString("utf8") : null);
+    at += size + 1;
+  }
+  return out;
+}
+
 /** Every file under `prefix` at a commit, relative to the project root. */
 export function filesAt(rev: string, prefix: string, cwd: string): string[] {
   return (tryGit(["ls-tree", "-r", "-z", "--name-only", rev, "--", prefix], cwd) ?? "")

@@ -5,6 +5,7 @@ import { VERSION } from "../version.js";
 import { runHook } from "../hooks/main.js";
 import { check, type CheckOptions } from "./commands/check.js";
 import { codeowners } from "./commands/codeowners.js";
+import { impact, why } from "./commands/impact.js";
 import { map, type MapOptions } from "./commands/map.js";
 import { mode } from "./commands/mode.js";
 import { propose, type ProposeOptions } from "./commands/propose.js";
@@ -245,6 +246,18 @@ export function buildProgram(io: Io, setExit: (code: number) => void): Command {
     .option("--dry-run", "say where the map would be written, without writing it")
     .option("--json", "print JSON instead of text")
     .action((opts: MapOptions) => setExit(map(io, opts)));
+
+  program
+    .command("impact <address>")
+    .description("everything that depends on a node (capsule#node), nearest first")
+    .option("--json", "print JSON instead of text")
+    .action((addr: string, opts: { json?: boolean }) => setExit(impact(io, addr, opts)));
+
+  program
+    .command("why <address>")
+    .description("the decisions behind a node (capsule#node), with rejected options")
+    .option("--json", "print JSON instead of text")
+    .action((addr: string, opts: { json?: boolean }) => setExit(why(io, addr, opts)));
 
   program
     .command("codeowners")

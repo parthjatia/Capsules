@@ -12,6 +12,8 @@ export interface Base {
   sha: string | null;
   /** How it was chosen, in plain words, for the report. */
   how: string;
+  /** HEAD's commit when the base was resolved (saves asking git again); absent if unknown. */
+  head?: string | null;
 }
 
 export interface GithubEvent {
@@ -46,6 +48,7 @@ export function resolveBase(cwd: string, explicit?: string): Base {
     ref,
     sha: head ? mergeBase(head, ref, cwd) : null,
     how,
+    head,
   });
 
   if (explicit !== undefined) {
@@ -66,5 +69,10 @@ export function resolveBase(cwd: string, explicit?: string): Base {
     if (revParse(ref, cwd)) return finish(ref, "the remote's default branch");
   }
   if (revParse("main", cwd)) return finish("main", "the local main branch, as there is no remote");
-  return { ref: null, sha: null, how: "no base found, so only uncommitted changes are checked" };
+  return {
+    ref: null,
+    sha: null,
+    how: "no base found, so only uncommitted changes are checked",
+    head,
+  };
 }

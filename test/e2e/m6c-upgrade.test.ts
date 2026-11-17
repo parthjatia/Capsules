@@ -13,6 +13,7 @@ import {
   mkdtempSync,
   readdirSync,
   readFileSync,
+  realpathSync,
   rmSync,
   statSync,
   writeFileSync,
@@ -169,7 +170,8 @@ describe("upgrading from the package partners have (0.1.0-rc.2)", () => {
     expect(installed).toBeTruthy();
     const installedCli = /^node "([^"]+)" hook pre-edit$/.exec(installed!)?.[1];
     expect(installedCli, installed).toBeTruthy();
-    expect(installedCli!.split("\\").join("/")).toBe(cli.split("\\").join("/"));
+    // The same file (on macOS, /var is a link to /private/var, so compare real paths).
+    expect(realpathSync.native(installedCli!)).toBe(realpathSync.native(cli));
     const blocked = hook(installedCli!, {
       session_id: "upgrade-2",
       tool_name: "Edit",

@@ -2,7 +2,8 @@
 import { spawnSync } from "node:child_process";
 import { existsSync, readFileSync, writeFileSync } from "node:fs";
 import { join } from "node:path";
-import { mkdtempSync } from "node:fs";
+import { mkdtempSync, rmSync } from "node:fs";
+import { dirname } from "node:path";
 import { tmpdir } from "node:os";
 import { afterAll, describe, expect, it } from "vitest";
 import { CLI, cleanup, commit, demoHistory, gitIn } from "./helpers.js";
@@ -145,6 +146,15 @@ describe("the 45-second demo repo (scripts/demo-45s.mjs)", () => {
       encoding: "utf8",
     });
     expect(test.status).not.toBe(0);
+    // ...because of the injected bug: with the commit before it, the same test passes.
+    const REFUND = "src/billing/invoices/refund.js";
+    gitIn(dir, "checkout", "HEAD~1", "--", REFUND);
+    const before = spawnSync(process.execPath, ["--test", "tests/invoices/refunds.test.js"], {
+      cwd: dir,
+      encoding: "utf8",
+    });
+    expect(before.status).toBe(0);
+    gitIn(dir, "checkout", "HEAD", "--", REFUND);
     // The hooks are installed, and block "make it pass by editing the test", with a next step.
     const settings = readFileSync(join(dir, ".claude", "settings.local.json"), "utf8");
     expect(settings).toContain("hook pre-edit");
@@ -179,5 +189,58 @@ describe("the 45-second demo repo (scripts/demo-45s.mjs)", () => {
     });
     expect(again.status).toBe(1);
     expect(again.stderr).toContain("is not empty");
+    rmSync(dirname(out), { recursive: true, force: true });
+  });
+});
+
+describe("gentle mode, a blocked-by concern: W111 and W108 too (D-040)", () => {
+  // A capsule file has no concerns of its own, so blocked-by applies to app and test files.
+  // The case that needs an owner: a test maintainer barred from payments changes a payments test.
+  it("a maintainer barred from payments may change a payments test in gentle mode, flagged for an owner", () => {
+    const dir = demoHistory();
+    edit(
+      dir,
+      ".capsules/config.yaml",
+      "weakened-tests: warn\n",
+      "mode: gentle\nweakened-tests: warn\n",
+    );
+    edit(
+      dir,
+      ".capsules/permissions.yaml",
+      "  test-maintainer:",
+      '  ui-maintainer:    { role: maintainer, capsules: ["**"], blocked-by: [payments] }\n  test-maintainer:',
+    );
+    // The payments concern also covers its own tests here (in the demo they only have a home).
+    edit(
+      dir,
+      ".capsules/_concerns/payments.md",
+      "  - src/billing/**\n",
+      "  - src/billing/**\n  - tests/payments/**\n",
+    );
+    expect(cli(dir, "lock").status).toBe(0);
+    commit(dir, "gentle, and a maintainer barred from payments"); // Parth
+    gitIn(dir, "branch", "-f", "main");
+    const input = {
+      hook_event_name: "PreToolUse",
+      session_id: "ui-pay",
+      agent_type: "ui-maintainer",
+      tool_name: "Edit",
+      tool_input: {
+        file_path: join(dir, "tests", "payments", "double-charge.test.js"),
+        old_string: "paying twice for one checkout charges once",
+        new_string: "paying twice for one checkout charges exactly once",
+      },
+    };
+    const r = hook(dir, "pre-edit", input);
+    expect(r.status).toBe(0);
+    expect(r.stdout).toContain("gentle mode, W111");
+    expect(r.stdout).toContain("ui-maintainer is blocked by the payments concern");
+    expect(r.stdout).toContain("An owner must approve this change in the pull request (W108)");
+    // Strict mode blocks the same edit.
+    edit(dir, ".capsules/config.yaml", "mode: gentle\n", "mode: strict\n");
+    commit(dir, "strict");
+    const s2 = hook(dir, "pre-edit", { ...input, session_id: "ui-pay-2" });
+    expect(s2.status).toBe(2);
+    expect(s2.stderr).toContain("ui-maintainer is blocked by the payments concern");
   });
 });

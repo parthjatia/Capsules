@@ -76,6 +76,7 @@ capsules("map");
 
 // A `capsules` command for Claude's shell in this demo, next to the folder (not inside it).
 const bin = `${dir}-bin`;
+if (existsSync(bin) && readdirSync(bin).length) fail(`${bin} is not empty. Pick a new folder.`);
 mkdirSync(bin, { recursive: true });
 writeFileSync(join(bin, "capsules"), `#!/bin/sh\nexec "${process.execPath}" "${CLI}" "$@"\n`, {
   mode: 0o755,

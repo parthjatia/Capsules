@@ -45,4 +45,12 @@ jobs:
         run: |
           npm --version
           node -e "const [a,b,c]=process.argv[1].split('.').map(Number); process.exit(a>11||(a===11&&(b>5||(b===5&&c>=1)))?0:1)" "$(npm --version)" || npm install -g npm@11
-      - run: npm publish --access public
+      # A pre-release (0.1.0-rc.2) goes to the `next` tag, so `npx @pyscoparth/capsules` keeps
+      # installing the last real release (D-042).
+      - name: npm publish
+        run: |
+          version="$(node -p "require('./package.json').version")"
+          case "$version" in
+            *-*) npm publish --access public --tag next ;;
+            *) npm publish --access public ;;
+          esac

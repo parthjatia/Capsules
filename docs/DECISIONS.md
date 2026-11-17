@@ -400,3 +400,10 @@ Newest at the bottom. Entries are never edited, only superseded by a later entry
 - **Changes:** `package.json` and `src/version.ts` version only; no spec change
 - **Why:** the partner package now carries M6a (gentle mode, notes, `capsules review`, starter tests, automatic sessions). A partner who already has the rc.1 file must be able to tell the two apart (`capsules --version`), and the file name in the guide must match.
 - **Decision:** version `0.1.0-rc.2`, still `"private": true`, so it can't be published by accident. `docs/PARTNER-INSTALL.md` describes the M6a behaviour, and `npm run try:partner` rehearses it (gentle mode and the SessionStart hook on a new install; a note reaching `capsules review`). Nothing is published or tagged.
+
+## D-042: Pre-releases are published under npm's `next` tag
+
+- **Date:** 2026-11-17 · **Approved by:** Parth (M6b: workflow changes go to `docs/proposed-workflows/` for him to install)
+- **Changes:** `docs/proposed-workflows/release.yml` only; no spec change
+- **Why:** the version is now `0.1.0-rc.2`. If a pre-release tag were ever pushed, a plain `npm publish` would make the test version what `npx @pyscoparth/capsules` installs by default (or npm 11 would refuse it).
+- **Decision:** the release workflow publishes a version with a `-` (pre-release) under the `next` tag, and a plain version (`0.1.0`) as usual. It still refuses while `package.json` is `private`, and still only runs on a tag Parth pushes.

@@ -17,6 +17,8 @@ const clean = (extra: Record<string, string> = {}) => {
   // In GitHub Actions, the real pull request's event would decide the base and who made a commit.
   delete env.GITHUB_ACTIONS;
   delete env.GITHUB_EVENT_PATH;
+  // A fixed "today", so the demo's review-by dates (A3: 2027-06-01) never change these outputs.
+  env.CAPSULES_TODAY = "2026-11-17";
   return { ...env, ...extra };
 };
 
@@ -370,6 +372,40 @@ describe("capsules review (C18.4)", () => {
     expect(cli(dir, {}, "check", "--no-run", "--base", "main").stdout).not.toContain("W108");
   });
 
+  it("an approval lapses when the approved rule or test changes again later (review, test review PR #9)", () => {
+    const dir = demoHistory();
+    riskyChange(dir);
+    review(dir);
+    expect(cli(dir, {}, "review", "approve", "r1", "r2", "--base", "main").status).toBe(0);
+    commit(dir, "approve"); // Parth, an owner
+    expect(cli(dir, {}, "check", "--no-run", "--base", "main").stdout).not.toContain("W108");
+    // Later, both change again, after the approval.
+    editFile(dir, INVOICES, C1_NEW, "Never create two invoices for the same customer, ever.");
+    editFile(dir, "tests/invoices/refunds.test.js", "assert.", "assert .");
+    expect(cli(dir, {}, "lock").status).toBe(0);
+    commit(dir, "change both again", agentTrailers("test-maintainer", "maintainer"));
+    const again = review(dir).stdout;
+    expect(again).toContain("Changed contract billing.invoices#C1");
+    expect(again).toContain("Changed existing test tests/invoices/refunds.test.js");
+    const ci = cli(dir, {}, "check", "--no-run", "--base", "main").stdout;
+    expect(ci).toMatch(/W108[\s\S]*billing\.invoices#C1|billing\.invoices#C1[\s\S]*W108/);
+    expect(ci).toContain("tests/invoices/refunds.test.js");
+  });
+
+  it("review done and mode are refused when only CAPSULES_SESSION is set, and the proposal survives", () => {
+    const dir = demoHistory();
+    cli(dir, {}, "propose", "billing.invoices#C1", "--why", "a");
+    const agent = { CAPSULES_SESSION: "some-session" };
+    const done = cli(dir, agent, "review", "done", "billing.invoices--C1--1");
+    expect(done.status).toBe(1);
+    expect(done.stderr).toContain("capsules review done is for humans");
+    expect(existsSync(join(proposalsDir(dir), "billing.invoices--C1--1.md"))).toBe(true);
+    const before = readFileSync(join(dir, ".capsules", "config.yaml"), "utf8");
+    const mode = cli(dir, agent, "mode", "gentle");
+    expect(mode.status).toBe(1);
+    expect(readFileSync(join(dir, ".capsules", "config.yaml"), "utf8")).toBe(before);
+  });
+
   it("refuses an item that changed after it was shown, and --routine never approves a rule", () => {
     const dir = demoHistory();
     riskyChange(dir);
@@ -568,6 +604,32 @@ describe("gentle mode (C18.5)", () => {
     commit(dir, "stranger agent", agentTrailers("ghost-agent"));
     const ci = cli(dir, {}, "check", "--no-run", "--base", "main");
     expect(ci.stdout).toMatch(/error E027[\s\S]*ghost-agent is not listed/);
+  });
+
+  it("the one rule (V1, V2) and append-only decisions still block in gentle mode (test review PR #9)", () => {
+    const dir = gentleRepo();
+    const at = (session: string, agent: string | null, file: string, from: string, to: string) =>
+      hook(dir, "pre-edit", {
+        hook_event_name: "PreToolUse",
+        session_id: session,
+        ...(agent ? { agent_type: agent } : {}),
+        tool_name: "Edit",
+        tool_input: { file_path: join(dir, ...file.split("/")), old_string: from, new_string: to },
+      });
+    // V1: code, then the existing test that judges it, in one session.
+    expect(at("v1", null, "src/billing/invoices/refund.js", "refund", "refund").status).toBe(0);
+    const v1 = at("v1", null, "tests/invoices/refunds.test.js", "assert.", "assert .");
+    expect(v1.status).toBe(2);
+    expect(v1.stderr).toContain("(E028)");
+    // V2: a contract, then the intent it serves, in one session (the drafter may propose both).
+    expect(at("v2", "capsules-drafter", INVOICES, C1_OLD, C1_NEW).status).toBe(0);
+    const v2 = at("v2", "capsules-drafter", INVOICES, "net of refunds.", "net of all refunds.");
+    expect(v2.status).toBe(2);
+    expect(v2.stderr).toContain("(E029)");
+    // An existing decision is never edited, in any mode.
+    const d = at("d", "capsules-drafter", INVOICES, "own ledger", "a ledger of our own");
+    expect(d.status).toBe(2);
+    expect(d.stderr).toContain("(E009)");
   });
 
   it("CI: the same commit is W111 in gentle mode and E027 in strict mode", () => {

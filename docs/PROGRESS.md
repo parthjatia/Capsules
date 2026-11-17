@@ -245,6 +245,11 @@ You should see the checkout page's home (`web`), parents (`root`), concerns (`pa
 
 - M4 split into M4a and M4b (D-023); commit-msg Git hook only with `--git-hooks`; Cursor gets compiled rules only in v0.1. test-maintainer agent (D-021). macOS job without a runner doesn't fail a PR (D-022). Docs facts checked (D-024).
 
+## Left open from the PR #9 test review (minor)
+
+- In gentle mode, an agent's rule change (`propose-*`) outside its scope gets only `W111`, not also `W108`. CODEOWNERS still requires owner approval on GitHub, so the effect is small; fix in M6b.
+- Untested, low risk: an agent modifying (not deleting) an existing proposal in CI; E033 for a human who owns some but not all of the capsules an approval covers (the demo has one owner of everything).
+
 ## Open questions for Parth
 
 1. Which concerns the design partners care about most (auth, payments, PII). These become the demo's concern capsules.

@@ -607,3 +607,45 @@ capsules mode shows that list; capsules mode strict changes the line." > msg.txt
     expect(bash(dir, twice).stderr).toContain("is for humans only");
   });
 });
+
+describe("end-of-task fast checks (C18.2)", () => {
+  const stop = (dir: string) => {
+    const r = hook(dir, "stop", { hook_event_name: "Stop", session_id: "s" });
+    expect(r.status).toBe(0); // report only, always
+    return r.stdout.trim() ? (JSON.parse(r.stdout) as { systemMessage: string }).systemMessage : "";
+  };
+
+  it("says what CI would fail on, without running the tests", () => {
+    const dir = demoHistory();
+    // Code and an assertion removed from the existing test that judges it (V1).
+    editFile(dir, "src/billing/invoices/refund.js", "", "// change\n");
+    editFile(
+      dir,
+      "tests/invoices/refunds.test.js",
+      "  assert.throws(() => refund(invoice, 901), /exceeds/);\n",
+      "",
+    );
+    commit(dir, "code and its test", agentTrailers());
+    const m = stop(dir);
+    expect(m).toMatch(/^capsules: CI would fail on \d+ problems? \(.*E028.*\)/);
+    expect(m).toContain("`capsules check --no-run` to see them");
+    expect(m).not.toContain("passed");
+  });
+
+  it("after a clean code change it says the fast checks passed and how to run the tests", () => {
+    const dir = demoHistory();
+    editFile(dir, "src/billing/plan.js", "", "// tidy\n");
+    expect(stop(dir)).toBe(
+      "capsules: no problems in the fast checks (one rule, permissions, decisions, staleness). Run `capsules check` to run your tests.",
+    );
+  });
+
+  it("points to capsules review when a proposal is waiting, and stays quiet when nothing changed", () => {
+    const dir = demoHistory();
+    expect(stop(dir)).toBe("");
+    cli(dir, {}, "propose", "billing.invoices#C1", "--why", "a");
+    const m = stop(dir);
+    expect(m).toContain("1 proposal waiting for you");
+    expect(m).toContain("`capsules review`");
+  });
+});

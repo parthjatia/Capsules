@@ -28,8 +28,35 @@ export async function stopReport(root: string): Promise<string | null> {
       membershipOf(f, p.capsules).conflict.length === 0,
   ).length;
 
+  // C18.2: what CI's fast checks would fail on, against the base (one rule, permissions,
+  // decisions, weakened tests). Never the check commands themselves.
+  const { resolveBase } = await import("../core/base.js");
+  const { changeUnits } = await import("../core/changes.js");
+  const { guard } = await import("../core/guard.js");
+  const { loadProposals } = await import("../core/proposals.js");
+  const base = resolveBase(root);
+  const g = guard(p, base, changeUnits(p, base));
+  const ciErrors = g.diagnostics.filter((d) => d.severity === "error");
+  const weakened = g.diagnostics.filter((d) => d.code === "W107").length;
+  const proposals = loadProposals(root).proposals.length;
+  const codeChanged = changed.some(
+    (f) => !f.startsWith(".capsules/") && !isIgnored(f, p.config.ignore),
+  );
+
   const parts: string[] = [];
   const next: string[] = [];
+  if (ciErrors.length) {
+    const codes = [...new Set(ciErrors.map((d) => d.code))].sort().join(", ");
+    parts.push(
+      `CI would fail on ${ciErrors.length} problem${ciErrors.length === 1 ? "" : "s"} (${codes})`,
+    );
+    next.push("`capsules check --no-run` to see them");
+  }
+  if (weakened) parts.push(`${weakened} weakened-test signal${weakened === 1 ? "" : "s"} (W107)`);
+  if (proposals) {
+    parts.push(`${proposals} proposal${proposals === 1 ? "" : "s"} waiting for you`);
+    next.push("`capsules review`");
+  }
   if (errors.length) {
     const codes = [...new Set(errors.map((d) => d.code))].sort().join(", ");
     parts.push(`${errors.length} error${errors.length === 1 ? "" : "s"} (${codes})`);
@@ -45,6 +72,11 @@ export async function stopReport(root: string): Promise<string | null> {
   if (orphans)
     parts.push(`${orphans} new or changed file${orphans === 1 ? "" : "s"} with no capsule`);
   if ((stale || prompts || orphans) && !next.length) next.push("`capsules status`");
-  if (!parts.length) return null;
-  return `capsules: ${parts.join(", ")}. Next: run ${[...new Set(next)].join(", then ")}.`;
+  const tests = codeChanged ? " Run `capsules check` to run your tests." : "";
+  if (!parts.length)
+    return codeChanged
+      ? "capsules: no problems in the fast checks (one rule, permissions, decisions, staleness)." +
+          tests
+      : null;
+  return `capsules: ${parts.join(", ")}. Next: run ${[...new Set(next)].join(", then ")}.${tests}`;
 }

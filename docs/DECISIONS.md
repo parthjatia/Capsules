@@ -393,3 +393,10 @@ Newest at the bottom. Entries are never edited, only superseded by a later entry
 - **Changes:** C18.5 (one sentence; no change to what is blocked)
 - **Why:** the PR #9 test review found that in gentle mode, a rule change (`propose-*`) by an agent outside its scope got only `W111`. The `W108` "an owner must approve" flag was dropped, in the hook and in CI, because the relaxed refusal skipped the approval step. CODEOWNERS still gated it on GitHub, but the report under-said what was needed.
 - **Decision:** a refusal that gentle mode relaxes still carries whether the change needs an owner's approval. The hook prints both notices, and CI reports both `W111` and `W108`. An approval in `approvals.lock` clears `W108` as usual; `W111` stays, because it is about the scope. Strict mode is unchanged (`E027`).
+
+## D-041: The rebuilt partner package is 0.1.0-rc.2
+
+- **Date:** 2026-11-17 · **Approved by:** Parth (M6b plan: "partner package rebuilt")
+- **Changes:** `package.json` and `src/version.ts` version only; no spec change
+- **Why:** the partner package now carries M6a (gentle mode, notes, `capsules review`, starter tests, automatic sessions). A partner who already has the rc.1 file must be able to tell the two apart (`capsules --version`), and the file name in the guide must match.
+- **Decision:** version `0.1.0-rc.2`, still `"private": true`, so it can't be published by accident. `docs/PARTNER-INSTALL.md` describes the M6a behaviour, and `npm run try:partner` rehearses it (gentle mode and the SessionStart hook on a new install; a note reaching `capsules review`). Nothing is published or tagged.

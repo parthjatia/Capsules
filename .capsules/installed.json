@@ -3,7 +3,7 @@
   "files": [
     {
       "path": ".claude/agents/capsules-drafter.md",
-      "blob": "53ef8fe72343b6094f804db033baea8954e4c068"
+      "blob": "6bfc4d6fef35ee2ffb44b0a5edf18054f3b6f3b9"
     },
     {
       "path": ".claude/agents/capsules-judge.md",
@@ -11,7 +11,7 @@
     },
     {
       "path": ".claude/commands/capsules-draft.md",
-      "blob": "ba2109d22e522831bed4b02b2787d3dd82841897"
+      "blob": "ae0100169e1a0535ef342ae111f820fcd7ed963e"
     },
     {
       "path": ".claude/commands/capsules-judge.md",
@@ -23,11 +23,11 @@
     },
     {
       "path": ".claude/commands/capsules-work.md",
-      "blob": "38594af33d445cc6a2e77069f710f0fb3fd92bfb"
+      "blob": "ecd4c9110dde0ea731ad40eec97673d36ab7df7c"
     },
     {
       "path": ".claude/skills/capsules/SKILL.md",
-      "blob": "6753371baf0786e1ad489a71adbcd40591b3979e"
+      "blob": "228aed33ac835570607c36c5d33d95af2416d48d"
     }
   ],
   "dirs": [

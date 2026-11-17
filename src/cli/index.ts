@@ -254,7 +254,9 @@ export function buildProgram(io: Io, setExit: (code: number) => void): Command {
 
   program
     .command("hook")
-    .description("called by agent and Git hooks only: pre-edit, pre-bash, stop, commit-msg <file>")
+    .description(
+      "called by agent and Git hooks only: session-start, pre-edit, pre-bash, stop, commit-msg <file>",
+    )
     .argument("<event>", "pre-edit | pre-bash | stop | commit-msg")
     .argument("[file]", "the commit message file (commit-msg only)")
     .action(async (event: string, file: string | undefined) =>

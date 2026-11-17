@@ -14,6 +14,9 @@ const clean = (extra: Record<string, string> = {}) => {
   delete env.CAPSULES_SESSION;
   delete env.CLAUDECODE;
   delete env.CLAUDE_ENV_FILE;
+  // In GitHub Actions, the real pull request's event would decide the base and who made a commit.
+  delete env.GITHUB_ACTIONS;
+  delete env.GITHUB_EVENT_PATH;
   return { ...env, ...extra };
 };
 
@@ -417,6 +420,24 @@ describe("capsules review (C18.4)", () => {
     gitIn(dir, "reset", "-q", "HEAD~1");
     commit(dir, "owner approves");
     expect(cli(dir, {}, "check", "--no-run", "--base", "main").stdout).not.toContain("E033");
+  });
+
+  it("in GitHub Actions, E033 judges the pull request's author, not the commit's email", () => {
+    const dir = demoHistory();
+    riskyChange(dir);
+    review(dir);
+    cli(dir, {}, "review", "approve", "r1", "--base", "main");
+    commit(dir, "owner's email, stranger's PR");
+    const event = (login: string) => {
+      const p = join(dir, `.event-${login}.json`);
+      writeFileSync(p, JSON.stringify({ pull_request: { user: { login } } }));
+      return { GITHUB_ACTIONS: "true", GITHUB_EVENT_PATH: p };
+    };
+    const stranger = cli(dir, event("someone-else"), "check", "--no-run", "--base", "main");
+    expect(stranger.stdout).toContain("error E033");
+    expect(stranger.stdout).toContain("the pull request author (someone-else)");
+    const owner = cli(dir, event("PARTHJATIA"), "check", "--no-run", "--base", "main");
+    expect(owner.stdout).not.toContain("E033");
   });
 
   it("hooks block direct edits to approvals.lock; review done removes a proposal", () => {

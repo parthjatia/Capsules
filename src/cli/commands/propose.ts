@@ -1,11 +1,11 @@
 // `capsules propose <address|check-file> --why <reason> [--text <new text>]` (C18.3, D-032):
 // leave a proposal or a note for an owner, instead of changing a rule or a test, or stopping.
 import { existsSync, mkdirSync, writeFileSync } from "node:fs";
-import { join, relative, resolve } from "node:path";
+import { join } from "node:path";
 import { parseAddress } from "../../core/address.js";
 import { membershipOf } from "../../core/membership.js";
 import { address } from "../../core/model.js";
-import { findProjectRoot, loadProject, UsageError } from "../../core/project.js";
+import { findProjectRoot, loadProject, projectPath, UsageError } from "../../core/project.js";
 import { PROPOSALS_DIR, renderProposal, slug, type ProposalKind } from "../../core/proposals.js";
 import { activeWorkSession } from "../../hooks/session.js";
 import { toJson } from "../../report/json.js";
@@ -47,8 +47,14 @@ export function propose(io: Io, target: string, opts: ProposeOptions, env = proc
     kind = !exists ? "new" : text === null ? "note" : "change";
     nodeSlug = p.node;
   } else {
-    const rel = relative(project.root, resolve(io.cwd, target)).split("\\").join("/");
-    if (rel.startsWith("..") || !existsSync(join(project.root, rel)))
+    // projectPath resolves short Windows names (RUNNER~1) and symlinks, as `explain` does.
+    let rel: string;
+    try {
+      rel = projectPath(project.root, io.cwd, target);
+    } catch {
+      throw new UsageError(proposalMsg.unknownTarget(target));
+    }
+    if (!existsSync(join(project.root, rel)))
       throw new UsageError(proposalMsg.unknownTarget(target));
     canonical = rel;
     capsule = membershipOf(rel, project.capsules).home ?? "root";

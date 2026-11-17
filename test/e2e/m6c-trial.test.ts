@@ -40,7 +40,11 @@ const weaken = (dir: string, session = "trial-1") => ({
   tool_name: "Edit",
   tool_input: { file_path: join(dir, REFUNDS), old_string: ASSERT, new_string: "" },
 });
-const PAUSE_FILE = (dir: string) => join(dir, ".capsules", "_cache", "pause.json");
+/** The pause file's path. Makes sure _cache exists: a fresh clone (as in CI) has none. */
+const PAUSE_FILE = (dir: string) => {
+  mkdirSync(join(dir, ".capsules", "_cache"), { recursive: true });
+  return join(dir, ".capsules", "_cache", "pause.json");
+};
 
 describe("capsules pause and resume (C19.1)", () => {
   it("are refused in an agent's shell, and pre-bash blocks them", () => {

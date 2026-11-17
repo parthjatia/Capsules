@@ -328,6 +328,29 @@ export const msg = {
       "a cosmetic mark clears every stale link to a node without review, so only an owner may declare it.",
       `Ask an owner of ${addr.split("#")[0]} (${owners.join(", ") || "none listed"}) to make that change, or remove the trailer and review each stale item with \`capsules refresh\`.`,
     ),
+  E033: (
+    commit: string,
+    who: string,
+    items: { key: string; capsule: string }[],
+    owners: string[],
+  ) =>
+    make(
+      "E033",
+      { file: ".capsules/approvals.lock" },
+      `${commit} changes approvals.lock, but ${who} doesn't own ${[...new Set(items.map((i) => i.capsule))].join(", ")}: ${items
+        .map((i) => i.key)
+        .join(", ")}.`,
+      "an approval tells everyone an owner read and accepted a rule or a test; only an owner may give it.",
+      `Remove those lines from the commit, and ask an owner (${owners.join(", ") || "none listed"}) to run \`capsules review approve\` themselves.`,
+    ),
+  E034: (file: string, line: number, text: string) =>
+    make(
+      "E034",
+      { file, line },
+      `${file} can't be read: line ${line} doesn't match the approvals.lock format ("${text.slice(0, 60)}").`,
+      "if the approvals can't be read, nothing counts as approved, so every rule and test change looks unreviewed.",
+      "Restore the file from Git (`git checkout -- .capsules/approvals.lock`); only `capsules review approve` should write it.",
+    ),
   E031: (at: At, addr: string, run: string, exit: string, output: string) =>
     make(
       "E031",
@@ -546,6 +569,57 @@ export const hookMsg = {
 };
 
 /** `capsules map` (C14). */
+/** `capsules review` (C18.4). */
+export const reviewMsg = {
+  humansOnly: (cmd: string) =>
+    `error  ${cmd} is for humans, and this looks like an agent's shell (CAPSULES_SESSION or CLAUDECODE is set).\n` +
+    "  why:  an approval tells everyone an owner read and accepted the change; an agent can't give it.\n" +
+    "  fix:  run it in your own terminal, outside Claude Code. CI also checks that an owner made the commit (E033).\n",
+  approveWhat: () =>
+    "error  Say what to approve: capsules review approve r1 r2 …, or --routine for the routine items.\n  fix:  run `capsules review` to see the items and their ids.\n",
+  reviewFirst: () =>
+    "error  Run `capsules review` first, so you approve exactly what you have read.\n",
+  unknownId: (id: string) =>
+    `${id}: no such item in the last \`capsules review\`. Run it again to see the ids.`,
+  gone: (id: string, key: string) =>
+    `${id}: ${key.replace(/^\w+ /, "")} isn't waiting any more (already approved, or the change was undone).`,
+  changedSince: (id: string, title: string) =>
+    `${id}: "${title}" changed after you reviewed it, so it was not approved. Run \`capsules review\` and read it again.`,
+  approved: (
+    done: string[],
+    problems: string[],
+    approvals: boolean,
+    lock: boolean,
+    notMine: string[],
+    dry: boolean,
+  ) => {
+    const out: string[] = [];
+    if (done.length)
+      out.push(`${dry ? "Would approve" : "Approved"}:`, ...done.map((d) => `  ${d}`));
+    if (problems.length)
+      out.push(...(done.length ? [""] : []), "Not approved:", ...problems.map((p) => `  ${p}`));
+    const files = [
+      approvals ? ".capsules/approvals.lock" : "",
+      lock ? ".capsules/capsules.lock" : "",
+    ].filter(Boolean);
+    if (files.length && !dry)
+      out.push(
+        "",
+        `Commit ${files.join(" and ")} yourself (not from an agent): CI checks that an owner made that commit (E033).`,
+      );
+    if (notMine.length)
+      out.push(
+        "",
+        `Note: your Git email isn't an owner of ${notMine.join(", ")} in permissions.yaml, so CI will reject this approval (E033).`,
+      );
+    return out.join("\n") + "\n";
+  },
+  noProposal: (id: string) =>
+    `error  There is no proposal ${id}.\n  fix:  run \`capsules review\` to see the open proposals and their names.\n`,
+  removed: (file: string, dry: boolean) =>
+    `${dry ? "Would remove" : "Removed"} ${file}. Commit that yourself; CI checks an owner removed it.\n`,
+};
+
 /** `capsules propose` and proposal files (C18.3). */
 export const proposalMsg = {
   needsWhy: () =>

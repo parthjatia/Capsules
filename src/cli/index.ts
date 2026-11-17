@@ -7,6 +7,7 @@ import { check, type CheckOptions } from "./commands/check.js";
 import { codeowners } from "./commands/codeowners.js";
 import { map, type MapOptions } from "./commands/map.js";
 import { propose, type ProposeOptions } from "./commands/propose.js";
+import { review, reviewApprove, reviewDone, type ReviewOptions } from "./commands/review.js";
 import { compile } from "./commands/compile.js";
 import { context, type ContextOptions } from "./commands/context.js";
 import { doctorCmd, init, remove } from "./commands/install.js";
@@ -194,6 +195,28 @@ export function buildProgram(io: Io, setExit: (code: number) => void): Command {
     .option("--dry-run", "say what would be written, without writing it")
     .option("--json", "print JSON instead of text")
     .action((target: string, opts: ProposeOptions) => setExit(propose(io, target, opts)));
+
+  const rev = program
+    .command("review")
+    .description(
+      "everything waiting for a human: changed rules and tests and proposals in full, routine items one line each",
+    )
+    .option("--base <ref>", "compare against this branch or commit (default: see C6.4)")
+    .option("--json", "print JSON instead of text")
+    .action((opts: ReviewOptions) => setExit(review(io, opts)));
+  rev
+    .command("approve [ids...]")
+    .description("approve items from the last `capsules review` (humans only)")
+    .option("--routine", "approve every routine item (never a rule, intent, example or test)")
+    .option("--base <ref>", "compare against this branch or commit (default: see C6.4)")
+    .option("--dry-run", "say what would be approved, without writing")
+    .option("--json", "print JSON instead of text")
+    .action((ids: string[], opts: ReviewOptions) => setExit(reviewApprove(io, ids, opts)));
+  rev
+    .command("done <proposal>")
+    .description("remove a proposal you have dealt with (humans only)")
+    .option("--dry-run", "say what would be removed, without removing it")
+    .action((id: string, opts: ReviewOptions) => setExit(reviewDone(io, id, opts)));
 
   program
     .command("map")

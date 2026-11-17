@@ -176,7 +176,7 @@ export interface Classified {
   capsule: string;
   concerns: string[];
   /** Each permission action the change needs, with what caused it. */
-  actions: { action: Action; detail: string }[];
+  actions: { action: Action; detail: string; node?: string }[];
   /** Check files: was the change purely additive? */
   additive?: boolean;
   /** Capsule files: what happened to each node, and whether the front matter changed. */
@@ -247,7 +247,13 @@ const NODE_ACTION: Record<NodeType, { added: Action | null; other: Action | null
   code: { added: "edit-code", other: "edit-code" },
 };
 
-const TOOL_FILES = new Set([LOCK_FILE, ".capsules/installed.json", ".capsules/.gitignore"]);
+// approvals.lock is tool-written too; who may change it is checked separately (E033, C18.4).
+const TOOL_FILES = new Set([
+  LOCK_FILE,
+  ".capsules/approvals.lock",
+  ".capsules/installed.json",
+  ".capsules/.gitignore",
+]);
 
 export function classify(
   f: UnitFile,
@@ -286,7 +292,11 @@ export function classify(
       const rule = NODE_ACTION[nc.node.type];
       const action = nc.change === "added" ? rule.added : rule.other;
       if (action)
-        actions.push({ action, detail: `${nc.change} ${nc.node.type} ${cap.id}#${nc.node.id}` });
+        actions.push({
+          action,
+          detail: `${nc.change} ${nc.node.type} ${cap.id}#${nc.node.id}`,
+          node: `${cap.id}#${nc.node.id}`,
+        });
     }
     return { ...base, kind: "capsule", capsule: cap.id, actions, nodes, frontChanged };
   }

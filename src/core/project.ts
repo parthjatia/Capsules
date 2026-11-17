@@ -1,5 +1,6 @@
 // Find and load a project: the `.capsules/` folder, its settings, every capsule file,
 // the tracked files, and all validation diagnostics.
+import { APPROVALS_FILE, emptyApprovals, parseApprovals, type Approvals } from "./approvals.js";
 import { existsSync, readdirSync, readFileSync, realpathSync, statSync } from "node:fs";
 import { dirname, join, relative, resolve, sep } from "node:path";
 import { parseConfig, type Config } from "./config.js";
@@ -37,6 +38,8 @@ export interface Project {
   lockOnDisk: Lock | null;
   /** The lock as it would be if every link were pinned now. */
   current: Lock;
+  /** What owners approved (C18.4); empty when there is no approvals.lock. */
+  approvals: Approvals;
   diagnostics: Diagnostic[];
 }
 
@@ -199,6 +202,13 @@ export function loadProject(root: string): Project {
   fileDiagnostics.push(
     ...lockDiagnostics(capsules, config, lockText !== null, lockOnDisk, current),
   );
+  let approvals = emptyApprovals();
+  const approvalsText = readOptional(join(root, ...APPROVALS_FILE.split("/")));
+  if (approvalsText !== null) {
+    const parsed = parseApprovals(approvalsText);
+    if (parsed.ok) approvals = parsed.approvals;
+    else diagnostics.push(msg.E034(APPROVALS_FILE, parsed.line, parsed.text));
+  }
 
   // Draft capsules report but never block (C2.1): their errors become warnings.
   const drafts = new Set(capsules.filter((c) => c.front?.status === "draft").map((c) => c.file));
@@ -215,6 +225,7 @@ export function loadProject(root: string): Project {
     membership,
     lockOnDisk,
     current,
+    approvals,
     diagnostics: sortDiagnostics(diagnostics),
   };
 }

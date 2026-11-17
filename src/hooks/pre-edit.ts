@@ -90,6 +90,7 @@ function isAdditive(before: string, after: string): boolean {
 
 const TOOL_FILES = new Set([
   ".capsules/capsules.lock",
+  ".capsules/approvals.lock",
   ".capsules/installed.json",
   ".capsules/.gitignore",
 ]);

@@ -285,3 +285,152 @@ describe("capsules propose (C18.3)", () => {
     expect(cli(dir, {}, "check", "--no-run", "--base", "main").stdout).not.toContain("E027");
   });
 });
+
+const INVOICES = ".capsules/billing/invoices.md";
+const C1_OLD = "Never create two invoices for the same customer and period.";
+const C1_NEW = "Never create two invoices for the same customer, period and plan.";
+const editFile = (dir: string, file: string, from: string, to: string) => {
+  const p = join(dir, ...file.split("/"));
+  const s = readFileSync(p, "utf8");
+  expect(s).toContain(from);
+  writeFileSync(p, s.replace(from, to));
+};
+/** Change rule C1 and weaken the refund test, as one agent commit. */
+function riskyChange(dir: string) {
+  editFile(dir, INVOICES, C1_OLD, C1_NEW);
+  editFile(
+    dir,
+    "tests/invoices/refunds.test.js",
+    "  assert.throws(() => refund(invoice, 901), /exceeds/);\n",
+    "",
+  );
+  expect(cli(dir, {}, "lock").status).toBe(0);
+  commit(dir, "rule and test", agentTrailers("test-maintainer", "maintainer"));
+}
+const review = (dir: string, ...args: string[]) =>
+  cli(dir, {}, "review", "--base", "main", ...args);
+
+describe("capsules review (C18.4)", () => {
+  it("lists risky items first and in full, routine items one line each", () => {
+    const dir = demoHistory();
+    riskyChange(dir);
+    cli(dir, {}, "propose", "billing.invoices#C1", "--why", "plans matter", "--text", "Per plan.");
+    const out = review(dir).stdout;
+    const r1 = out.indexOf("r1  Changed contract billing.invoices#C1");
+    const r2 = out.indexOf("r2  Changed existing test tests/invoices/refunds.test.js");
+    const prop = out.indexOf("--  Proposal from a human (no session) about billing.invoices#C1");
+    const routine = out.indexOf("Routine (one line each):");
+    expect([r1, r2, prop, routine].every((i) => i > 0)).toBe(true);
+    expect(r1 < r2 && r2 < prop && prop < routine).toBe(true);
+    expect(out).toContain(`before: ${C1_OLD}`);
+    expect(out).toContain(`after:  ${C1_NEW}`);
+    expect(out).toContain("-  assert.throws(() => refund(invoice, 901), /exceeds/);");
+    expect(out).toContain("Per plan.");
+    expect(out.slice(routine)).toMatch(
+      /r\d+ +Stale link: billing\.invoices#D7 \(serves billing\.invoices#C1\)/,
+    );
+  });
+
+  it("approving is refused in an agent's shell", () => {
+    const dir = demoHistory();
+    riskyChange(dir);
+    review(dir);
+    for (const env of [{ CLAUDECODE: "1" }, { CAPSULES_SESSION: "cc-1" }]) {
+      const r = cli(dir, env, "review", "approve", "r1", "--base", "main");
+      expect(r.status).toBe(1);
+      expect(r.stderr).toContain("is for humans");
+    }
+    expect(existsSync(join(dir, ".capsules", "approvals.lock"))).toBe(false);
+    const done = cli(dir, { CLAUDECODE: "1" }, "review", "done", "x");
+    expect(done.stderr).toContain("is for humans");
+  });
+
+  it("an approval pins exactly what was shown: approved items leave the list and lose W108", () => {
+    const dir = demoHistory();
+    riskyChange(dir);
+    expect(cli(dir, {}, "check", "--no-run", "--base", "main").stdout).toContain("W108");
+    review(dir);
+    const a = cli(dir, {}, "review", "approve", "r1", "r2", "--base", "main");
+    expect(a.status).toBe(0);
+    expect(a.stdout).toContain("r1  Changed contract billing.invoices#C1");
+    const lock = readFileSync(join(dir, ".capsules", "approvals.lock"), "utf8");
+    expect(lock).toMatch(/^# approvals\.lock v1\./);
+    expect(lock).toMatch(/\nnode billing\.invoices#C1 [0-9a-f]{12}\n/);
+    expect(lock).toMatch(
+      /\nfile billing\.invoices tests\/invoices\/refunds\.test\.js [0-9a-f]{40}\n$/,
+    );
+    const after = review(dir).stdout;
+    expect(after).not.toContain("Changed contract billing.invoices#C1");
+    expect(after).not.toContain("Changed existing test");
+    commit(dir, "approve"); // Parth, an owner
+    expect(cli(dir, {}, "check", "--no-run", "--base", "main").stdout).not.toContain("W108");
+  });
+
+  it("refuses an item that changed after it was shown, and --routine never approves a rule", () => {
+    const dir = demoHistory();
+    riskyChange(dir);
+    review(dir);
+    editFile(dir, INVOICES, C1_NEW, "Never create invoices.");
+    cli(dir, {}, "lock");
+    const r = cli(dir, {}, "review", "approve", "r1", "--base", "main");
+    expect(r.status).toBe(1);
+    expect(r.stdout).toContain("changed after you reviewed it, so it was not approved");
+    review(dir);
+    const routine = cli(dir, {}, "review", "approve", "--routine", "--base", "main");
+    expect(routine.status).toBe(0);
+    expect(routine.stdout).toContain("Stale link");
+    expect(routine.stdout).not.toContain("contract");
+    expect(existsSync(join(dir, ".capsules", "approvals.lock"))).toBe(false);
+    // The stale links were re-pinned in capsules.lock.
+    expect(cli(dir, {}, "status").stdout).not.toContain("billing.invoices#D7 (serves");
+  });
+
+  it("an approved new check is no longer unreviewed; a starter check from the drafter is (C18.6)", () => {
+    const dir = demoHistory();
+    writeFileSync(join(dir, "tests", "invoices", "starter.test.js"), "// a starter check\n");
+    commit(dir, "starter", agentTrailers("capsules-drafter", "drafter"));
+    expect(cli(dir, {}, "check", "--no-run", "--base", "main").stdout).toMatch(
+      /unreviewed new checks[\s\S]*tests\/invoices\/starter\.test\.js/,
+    );
+    review(dir);
+    expect(review(dir).stdout).toContain("New test tests/invoices/starter.test.js (unreviewed");
+    expect(cli(dir, {}, "review", "approve", "r1", "--base", "main").status).toBe(0);
+    expect(cli(dir, {}, "check", "--no-run", "--base", "main").stdout).not.toContain(
+      "unreviewed new checks",
+    );
+  });
+
+  it("CI: approvals.lock changed by an agent, or by someone who owns nothing, is E033", () => {
+    const dir = demoHistory();
+    riskyChange(dir);
+    review(dir);
+    cli(dir, {}, "review", "approve", "r1", "--base", "main");
+    commit(dir, "agent approves", agentTrailers());
+    const agent = cli(dir, {}, "check", "--no-run", "--base", "main");
+    expect(agent.status).toBe(1);
+    expect(agent.stdout).toContain("error E033");
+    expect(agent.stdout).toContain("the agent default doesn't own billing.invoices");
+    gitIn(dir, "reset", "-q", "HEAD~1");
+    commit(dir, "stranger approves", [], "stranger@example.com");
+    expect(cli(dir, {}, "check", "--no-run", "--base", "main").stdout).toContain("error E033");
+    gitIn(dir, "reset", "-q", "HEAD~1");
+    commit(dir, "owner approves");
+    expect(cli(dir, {}, "check", "--no-run", "--base", "main").stdout).not.toContain("E033");
+  });
+
+  it("hooks block direct edits to approvals.lock; review done removes a proposal", () => {
+    const dir = demoHistory();
+    const r = hook(dir, "pre-edit", {
+      hook_event_name: "PreToolUse",
+      session_id: "w",
+      tool_name: "Write",
+      tool_input: { file_path: join(dir, ".capsules", "approvals.lock"), content: "x" },
+    });
+    expect(r.status).toBe(2);
+    expect(r.stderr).toContain("written only by capsules' own commands");
+    cli(dir, {}, "propose", "billing.invoices#C1", "--why", "a");
+    const d = cli(dir, {}, "review", "done", "billing.invoices--C1--1");
+    expect(d.status).toBe(0);
+    expect(existsSync(join(proposalsDir(dir), "billing.invoices--C1--1.md"))).toBe(false);
+  });
+});

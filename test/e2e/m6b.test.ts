@@ -2,6 +2,8 @@
 import { spawnSync } from "node:child_process";
 import { existsSync, readFileSync, writeFileSync } from "node:fs";
 import { join } from "node:path";
+import { mkdtempSync } from "node:fs";
+import { tmpdir } from "node:os";
 import { afterAll, describe, expect, it } from "vitest";
 import { CLI, cleanup, commit, demoHistory, gitIn } from "./helpers.js";
 
@@ -119,5 +121,63 @@ describe("gentle mode keeps owner approval for rule changes (D-040)", () => {
     expect(r.status).toBe(2);
     expect(r.stderr).toContain("(E027)");
     expect(existsSync(join(dir, ".capsules", "_cache", "gentle-log.jsonl"))).toBe(false);
+  });
+});
+
+const DEMO = join(import.meta.dirname, "..", "..", "scripts", "demo-45s.mjs");
+
+describe("the 45-second demo repo (scripts/demo-45s.mjs)", () => {
+  it("prepares a repo where the refund test fails, editing that test is blocked, and capsules runs", () => {
+    const out = join(mkdtempSync(join(tmpdir(), "capsules-45s-test-")), "demo");
+    const prep = spawnSync(process.execPath, [DEMO, "--out", out, "--json"], {
+      encoding: "utf8",
+      env: clean(),
+    });
+    expect(prep.status).toBe(0);
+    const { dir, bin, map } = JSON.parse(prep.stdout) as { dir: string; bin: string; map: string };
+    expect(dir).toBe(out);
+    expect(existsSync(map)).toBe(true);
+    // Clean working tree: the bug and the setup are committed, so Claude's changes stand out.
+    expect(gitIn(dir, "status", "--porcelain").trim()).toBe("");
+    // The bug is real: the refund test fails.
+    const test = spawnSync(process.execPath, ["--test", "tests/invoices/refunds.test.js"], {
+      cwd: dir,
+      encoding: "utf8",
+    });
+    expect(test.status).not.toBe(0);
+    // The hooks are installed, and block "make it pass by editing the test", with a next step.
+    const settings = readFileSync(join(dir, ".claude", "settings.local.json"), "utf8");
+    expect(settings).toContain("hook pre-edit");
+    expect(settings).toContain("hook session-start");
+    const r = hook(dir, "pre-edit", {
+      hook_event_name: "PreToolUse",
+      session_id: "demo",
+      tool_name: "Edit",
+      tool_input: {
+        file_path: join(dir, "tests", "invoices", "refunds.test.js"),
+        old_string: "assert",
+        new_string: "// assert",
+      },
+    });
+    expect(r.status).toBe(2);
+    expect(r.stderr).toContain("(E027)");
+    expect(r.stderr).toContain("next:    don't try another way around this block");
+    // The demo's own `capsules` command works for Claude's shell, with nothing installed globally.
+    const shim =
+      process.platform === "win32"
+        ? spawnSync("cmd.exe", ["/d", "/c", join(bin, "capsules.cmd"), "--version"], {
+            cwd: dir,
+            encoding: "utf8",
+          })
+        : spawnSync("sh", [join(bin, "capsules"), "--version"], { cwd: dir, encoding: "utf8" });
+    expect(shim.status).toBe(0);
+    expect(shim.stdout.trim()).toMatch(/^\d+\.\d+\.\d+/);
+    // A second run into the same folder is refused rather than mixing two demos.
+    const again = spawnSync(process.execPath, [DEMO, "--out", out], {
+      encoding: "utf8",
+      env: clean(),
+    });
+    expect(again.status).toBe(1);
+    expect(again.stderr).toContain("is not empty");
   });
 });

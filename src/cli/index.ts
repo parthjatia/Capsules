@@ -6,6 +6,7 @@ import { runHook } from "../hooks/main.js";
 import { check, type CheckOptions } from "./commands/check.js";
 import { codeowners } from "./commands/codeowners.js";
 import { map, type MapOptions } from "./commands/map.js";
+import { mode } from "./commands/mode.js";
 import { propose, type ProposeOptions } from "./commands/propose.js";
 import { review, reviewApprove, reviewDone, type ReviewOptions } from "./commands/review.js";
 import { compile } from "./commands/compile.js";
@@ -217,6 +218,17 @@ export function buildProgram(io: Io, setExit: (code: number) => void): Command {
     .description("remove a proposal you have dealt with (humans only)")
     .option("--dry-run", "say what would be removed, without removing it")
     .action((id: string, opts: ReviewOptions) => setExit(reviewDone(io, id, opts)));
+
+  program
+    .command("mode [mode]")
+    .description(
+      "show the mode (strict or gentle) and what strict mode would have blocked here; set it (humans only)",
+    )
+    .option("--dry-run", "say what would change, without writing")
+    .option("--json", "print JSON instead of text")
+    .action((value: string | undefined, opts: { dryRun?: boolean; json?: boolean }) =>
+      setExit(mode(io, value, opts)),
+    );
 
   program
     .command("map")

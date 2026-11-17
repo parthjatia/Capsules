@@ -4,7 +4,8 @@ import { isProposalPath, proposalCapsule } from "../core/proposal-path.js";
 import { existsSync, readFileSync } from "node:fs";
 import { isAbsolute, relative, resolve, sep } from "node:path";
 import picomatch from "picomatch";
-import { agentMay, settingsAction, type Action } from "../core/access.js";
+import { agentMay, gentleRelaxes, settingsAction, type Action } from "../core/access.js";
+import { recordGentle } from "./session.js";
 import {
   capsuleFromPath,
   capsulesJudgedByFile,
@@ -417,6 +418,7 @@ export async function preEdit(
 
   // Permissions (C5.2 step 3). After the one rule, whose message explains more.
   const approvals: string[] = [];
+  const gentle: string[] = [];
   for (const { action, detail } of facts.actions) {
     const v = agentMay(
       actor.agent,
@@ -426,6 +428,17 @@ export async function preEdit(
       index.permissions,
       actor.scope,
     );
+    if (gentleRelaxes(v, index.config.mode)) {
+      // C18.5: gentle mode only warns, and remembers what strict mode would have blocked.
+      gentle.push(`${actor.agent}: ${detail} (${v.allowed ? "" : v.reason})`);
+      recordGentle(root, {
+        agent: actor.agent,
+        file: path,
+        change: detail,
+        reason: v.allowed ? "" : v.reason,
+      });
+      continue;
+    }
     if (!v.allowed)
       return block(
         hookMsg.blocked(
@@ -453,5 +466,9 @@ export async function preEdit(
   for (const r of facts.rules) if (!t.rules.some((x) => x.addr === r.addr)) t.rules.push(r);
   writeTracking(root, actor.trackKey, t);
 
-  return approvals.length ? allow(hookMsg.approval(approvals.join("; "))) : allow();
+  const notices = [
+    ...gentle.map((g) => hookMsg.gentle(g)),
+    ...(approvals.length ? [hookMsg.approval(approvals.join("; "))] : []),
+  ];
+  return notices.length ? allow(notices.join("\n")) : allow();
 }

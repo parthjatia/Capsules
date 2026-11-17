@@ -265,6 +265,21 @@ export const msg = {
       "the app's behaviour depends on this prompt, so the rules about it may need re-checking.",
       `Re-check ${linked.length ? linked.join(", ") : "the contracts this prompt serves"}, then run \`capsules lock\` to record the new version.`,
     ),
+  W111: (
+    unit: string,
+    who: string,
+    capsule: string,
+    action: string,
+    reason: string,
+    what: string[],
+  ) =>
+    make(
+      "W111",
+      {},
+      `${unit}, by ${who}: ${action} in ${capsule} would be blocked in strict mode (${reason}): ${what.join(", ")}.`,
+      "gentle mode lets agents work outside their scope while you get used to capsules; strict mode would refuse this.",
+      "nothing to do now. When the warnings look right, run `capsules mode strict` in your own terminal.",
+    ),
   E009: (at: At, addr: string, how: "edited" | "deleted") =>
     make(
       "E009",
@@ -559,6 +574,12 @@ export const hookMsg = {
     "capsules can only check edits made with the Edit and Write tools; shell writes to protected files skip those checks.",
   bashFix:
     "make the change with the Edit or Write tool so capsules can check it, or ask a human to make it.",
+  humansOnlyWhy:
+    "approving a rule or a test, removing a proposal and switching the mode are an owner's decisions; an agent can't make them.",
+  humansOnlyFix:
+    "tell the user what you'd like approved; they run `capsules review` and approve it in their own terminal.",
+  gentle: (what: string) =>
+    `capsules (gentle mode, W111): allowed, but strict mode would block this: ${what}. Run \`capsules mode\` to see the list.`,
   approval: (what: string) =>
     `capsules: ${what}. An owner must approve this change in the pull request (W108).`,
   crashed: (detail: string, open: boolean) =>
@@ -569,6 +590,35 @@ export const hookMsg = {
 };
 
 /** `capsules map` (C14). */
+/** `capsules mode` (C18.5). */
+export const modeMsg = {
+  show: (mode: string, log: { date: string; agent: string; file: string; reason: string }[]) => {
+    const head =
+      mode === "gentle"
+        ? "capsules mode: gentle. Agents working outside their scope, or on a concern they are barred from, only get a warning (W111). Everything else is blocked as in strict mode."
+        : "capsules mode: strict. Every permission problem is blocked.";
+    if (!log.length)
+      return `${head}\nOn this machine, nothing would have been blocked by strict mode yet.\n`;
+    const shown = log.slice(-20);
+    return (
+      `${head}\n\nWhat strict mode would have blocked on this machine (${log.length}${log.length > 20 ? `, last 20 shown` : ""}):\n` +
+      shown.map((e) => `  ${e.date}  ${e.agent}  ${e.file}: ${e.reason}`).join("\n") +
+      "\n\nTo switch, run in your own terminal: capsules mode strict\n"
+    );
+  },
+  bad: (v: string) =>
+    `"${v}" is not a mode.\n  fix: use capsules mode strict, or capsules mode gentle.`,
+  already: (m: string) => `capsules mode is already ${m}. Nothing changed.\n`,
+  couldNotSet: () =>
+    "capsules couldn't change the mode line in .capsules/config.yaml safely, so nothing was written.\n  fix: set `mode: strict` (or gentle) in that file by hand.",
+  set: (was: string, now: string, logged: number, dry: boolean) =>
+    `${dry ? "Would set" : "Set"} mode: ${now} in .capsules/config.yaml (was ${was}).` +
+    (now === "strict" && logged
+      ? ` The ${logged} change${logged === 1 ? "" : "s"} listed by \`capsules mode\` would now be blocked.`
+      : "") +
+    "\nCommit .capsules/config.yaml yourself: only an owner may change it (edit-config).\n",
+};
+
 /** `capsules review` (C18.4). */
 export const reviewMsg = {
   humansOnly: (cmd: string) =>

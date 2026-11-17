@@ -1,7 +1,15 @@
 // Sessions (C8) and what each session has changed, so the hooks can apply the one rule
 // within a session (C6.2, D-024). Everything lives in .capsules/_cache/sessions/.
 import { createHash, randomBytes } from "node:crypto";
-import { existsSync, mkdirSync, readFileSync, renameSync, rmSync, writeFileSync } from "node:fs";
+import {
+  appendFileSync,
+  existsSync,
+  mkdirSync,
+  readFileSync,
+  renameSync,
+  rmSync,
+  writeFileSync,
+} from "node:fs";
 import { join } from "node:path";
 import type { Perms } from "../core/access.js";
 
@@ -192,6 +200,41 @@ export function readTracking(root: string, key: string): Tracking {
 
 export function writeTracking(root: string, key: string, t: Tracking): void {
   writeJson(trackFile(root, key), t);
+}
+
+/** C18.5: what strict mode would have blocked, on this machine only. */
+export const GENTLE_LOG = ".capsules/_cache/gentle-log.jsonl";
+
+export interface GentleEntry {
+  date: string;
+  agent: string;
+  file: string;
+  change: string;
+  reason: string;
+}
+
+export function recordGentle(root: string, e: Omit<GentleEntry, "date">): void {
+  const p = join(root, ...GENTLE_LOG.split("/"));
+  mkdirSync(join(p, ".."), { recursive: true });
+  const entry: GentleEntry = { date: new Date().toISOString().slice(0, 10), ...e };
+  appendFileSync(p, JSON.stringify(entry) + "\n");
+}
+
+export function readGentle(root: string): GentleEntry[] {
+  try {
+    return readFileSync(join(root, ...GENTLE_LOG.split("/")), "utf8")
+      .split("\n")
+      .filter((l) => l.trim())
+      .flatMap((l) => {
+        try {
+          return [JSON.parse(l) as GentleEntry];
+        } catch {
+          return [];
+        }
+      });
+  } catch {
+    return [];
+  }
 }
 
 /** Cosmetic marks waiting for the next commit message (C7.3, D-013). */

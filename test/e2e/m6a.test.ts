@@ -4,6 +4,7 @@ import { existsSync, readFileSync, writeFileSync } from "node:fs";
 import { join } from "node:path";
 import { afterAll, describe, expect, it } from "vitest";
 import { CLI, cleanup, commit, demoHistory, demoRepo, gitIn } from "./helpers.js";
+import { makeRepo } from "./helpers.js";
 
 afterAll(cleanup);
 
@@ -432,5 +433,177 @@ describe("capsules review (C18.4)", () => {
     const d = cli(dir, {}, "review", "done", "billing.invoices--C1--1");
     expect(d.status).toBe(0);
     expect(existsSync(join(proposalsDir(dir), "billing.invoices--C1--1.md"))).toBe(false);
+  });
+});
+
+const CONFIG = ".capsules/config.yaml";
+const gentleRepo = () => {
+  const dir = demoHistory();
+  editFile(
+    dir,
+    CONFIG,
+    "weakened-tests: warn\n",
+    "mode: gentle # try it out\nweakened-tests: warn\n",
+  );
+  commit(dir, "gentle"); // Parth
+  gitIn(dir, "branch", "-f", "main");
+  return dir;
+};
+const editAs = (dir: string, agent: string, file: string, session = `as-${agent}`) =>
+  hook(dir, "pre-edit", {
+    hook_event_name: "PreToolUse",
+    session_id: session,
+    agent_type: agent,
+    tool_name: "Edit",
+    tool_input: { file_path: join(dir, file), old_string: "a", new_string: "b" },
+  });
+
+describe("gentle mode (C18.5)", () => {
+  it("only an agent's scope and its blocked-by concerns relax to a warning, and it is logged", () => {
+    const dir = gentleRepo();
+    const fe = editAs(dir, "frontend-agent", "src/web/checkout.tsx"); // covered by payments and pii
+    expect(fe.status).toBe(0);
+    expect(fe.stdout).toContain("gentle mode, W111");
+    expect(fe.stdout).toContain("frontend-agent is blocked by the payments concern");
+    const billing = editAs(dir, "billing-agent", "src/web/cart.tsx"); // outside billing.**
+    expect(billing.status).toBe(0);
+    expect(billing.stdout).toContain("web is outside the scope of billing-agent");
+    const m = cli(dir, {}, "mode");
+    expect(m.stdout).toContain("capsules mode: gentle.");
+    expect(m.stdout).toMatch(/\d{4}-\d\d-\d\d {2}frontend-agent {2}src\/web\/checkout\.tsx:/);
+    expect(m.stdout).toContain("billing-agent  src/web/cart.tsx");
+  });
+
+  it("everything else stays blocked: existing tests, the guard, rules, decisions, unknown agents", () => {
+    const dir = gentleRepo();
+    const blocked = (r: { status: number | null; stderr: string }, code: string) => {
+      expect(r.status).toBe(2);
+      expect(r.stderr).toContain(`(${code})`);
+    };
+    blocked(editAs(dir, "default", "tests/invoices/refunds.test.js"), "E027"); // change-checks
+    blocked(editAs(dir, "default", CONFIG), "E027"); // edit-config
+    blocked(editAs(dir, "default", ".capsules/permissions.yaml"), "E027");
+    blocked(editAs(dir, "default", ".capsules/capsules.lock"), "E027");
+    const rule = hook(dir, "pre-edit", {
+      hook_event_name: "PreToolUse",
+      session_id: "rules",
+      tool_name: "Edit",
+      tool_input: {
+        file_path: join(dir, ...INVOICES.split("/")),
+        old_string: C1_OLD,
+        new_string: C1_NEW,
+      },
+    });
+    blocked(rule, "E027"); // propose-contracts: not in the builder role
+    // The one rule (V1) still holds in gentle mode.
+    expect(editAs(dir, "test-maintainer", "src/billing/invoices/create.js", "one").status).toBe(2);
+    // An unknown agent name is the default agent; a commit by an unlisted agent is still E027.
+    editFile(dir, "src/billing/charge.js", "", "// x\n");
+    commit(dir, "stranger agent", agentTrailers("ghost-agent"));
+    const ci = cli(dir, {}, "check", "--no-run", "--base", "main");
+    expect(ci.stdout).toMatch(/error E027[\s\S]*ghost-agent is not listed/);
+  });
+
+  it("CI: the same commit is W111 in gentle mode and E027 in strict mode", () => {
+    const dir = gentleRepo();
+    editFile(dir, "src/web/checkout.tsx", "", "// tidy\n");
+    commit(dir, "frontend touches payments", agentTrailers("frontend-agent"));
+    const gentle = cli(dir, {}, "check", "--no-run", "--base", "main");
+    expect(gentle.stdout).toContain("warning W111");
+    expect(gentle.stdout).not.toContain("error E027");
+    expect(gentle.stdout).toContain("capsules check: 0 errors");
+    expect(cli(dir, {}, "mode", "strict").status).toBe(0);
+    const strict = cli(dir, {}, "check", "--no-run", "--base", "main");
+    expect(strict.stdout).toContain("error E027");
+    expect(strict.stdout).not.toContain("W111");
+  });
+
+  it("capsules mode strict keeps config.yaml's comments, and is refused in an agent's shell", () => {
+    const dir = gentleRepo();
+    const before = readFileSync(join(dir, ...CONFIG.split("/")), "utf8");
+    const agent = cli(dir, { CLAUDECODE: "1" }, "mode", "strict");
+    expect(agent.status).toBe(1);
+    expect(agent.stderr).toContain("is for humans");
+    expect(readFileSync(join(dir, ...CONFIG.split("/")), "utf8")).toBe(before);
+    const r = cli(dir, {}, "mode", "strict");
+    expect(r.status).toBe(0);
+    expect(r.stdout).toContain("Set mode: strict in .capsules/config.yaml (was gentle).");
+    const after = readFileSync(join(dir, ...CONFIG.split("/")), "utf8");
+    expect(after).toBe(before.replace("mode: gentle # try it out", "mode: strict # try it out"));
+    expect(editAs(dir, "frontend-agent", "src/web/checkout.tsx").status).toBe(2);
+    expect(cli(dir, {}, "mode", "loose").status).toBe(64);
+  });
+
+  it("pre-bash blocks the humans-only commands, and allows looking", () => {
+    const dir = demoRepo();
+    const bash = (command: string) =>
+      hook(dir, "pre-bash", {
+        hook_event_name: "PreToolUse",
+        session_id: "b",
+        tool_name: "Bash",
+        tool_input: { command },
+      });
+    for (const c of [
+      "capsules review approve r1",
+      "npx capsules review approve --routine",
+      'node "C:/x/dist/cli.js" review done billing--C1--1',
+      "cd .. && capsules mode strict",
+    ]) {
+      const r = bash(c);
+      expect(r.status, c).toBe(2);
+      expect(r.stderr).toContain("is for humans only");
+    }
+    for (const c of ["capsules review", "capsules mode", "capsules mode --json", "capsules status"])
+      expect(bash(c).status, c).toBe(0);
+  });
+
+  it("new installs start gentle; an existing config.yaml is kept as it is", () => {
+    const fresh = makeRepo({ "src/app.js": "export const x = 1;\n" });
+    gitIn(fresh, "config", "user.email", "63094286+parthjatia@users.noreply.github.com");
+    expect(cli(fresh, {}, "init", "--yes").status).toBe(0);
+    expect(readFileSync(join(fresh, ...CONFIG.split("/")), "utf8")).toMatch(/^mode: gentle /m);
+    expect(cli(fresh, {}, "mode").stdout).toContain("capsules mode: gentle.");
+    const demo = demoRepo();
+    gitIn(demo, "config", "user.email", "63094286+parthjatia@users.noreply.github.com");
+    const kept = readFileSync(join(demo, ...CONFIG.split("/")), "utf8");
+    expect(cli(demo, {}, "init", "--yes").status).toBe(0);
+    expect(readFileSync(join(demo, ...CONFIG.split("/")), "utf8")).toBe(kept);
+    expect(cli(demo, {}, "mode").stdout).toContain("capsules mode: strict.");
+  });
+});
+
+describe("pre-bash reads heredocs as data (DOGFOOD 2026-11-17)", () => {
+  const bash = (dir: string, command: string) =>
+    hook(dir, "pre-bash", {
+      hook_event_name: "PreToolUse",
+      session_id: "h",
+      tool_name: "Bash",
+      tool_input: { command },
+    });
+
+  it("an apostrophe in a heredoc body no longer turns later quoted text into commands", () => {
+    const dir = demoRepo();
+    // The command that was blocked by mistake: a heredoc with "wouldn't", then a commit
+    // message that mentions `capsules mode`.
+    const cmd = [
+      "cat >> notes.md <<'EOF'",
+      "| it wouldn't be additive |",
+      "EOF",
+      `printf '%s\\n' "Gentle mode
+capsules mode shows that list; capsules mode strict changes the line." > msg.txt`,
+    ].join("\n");
+    expect(bash(dir, cmd).status).toBe(0);
+    const tab = ["cat > notes.md <<-EOF", "\tdon't", "\tEOF", "echo done"].join("\n");
+    expect(bash(dir, tab).status).toBe(0);
+  });
+
+  it("writes around a heredoc are still caught", () => {
+    const dir = demoRepo();
+    const into = ["cat > .capsules/billing.md <<'EOF'", "x", "EOF"].join("\n");
+    expect(bash(dir, into).status).toBe(2);
+    const after = ["cat <<EOF", "it's fine", "EOF", "rm tests/invoices/refunds.test.js"].join("\n");
+    expect(bash(dir, after).status).toBe(2);
+    const twice = ["cat <<A <<'B'", "a", "A", "b", "B", "capsules review approve r1"].join("\n");
+    expect(bash(dir, twice).stderr).toContain("is for humans only");
   });
 });

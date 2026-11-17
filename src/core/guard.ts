@@ -40,6 +40,7 @@ import { isIgnored } from "./membership.js";
 import { address, type Capsule, type CapsuleNode } from "./model.js";
 import { parseCapsuleFile } from "./parse.js";
 import { agentMay, type Action, type Verdict } from "./permissions.js";
+import { gentleRelaxes } from "./access.js";
 import { capsuleFromPath, checkJudges } from "./judges.js";
 import type { Project } from "./project.js";
 import { targetOf } from "./resolve.js";
@@ -138,10 +139,24 @@ function checkPermissions(project: Project, unit: ChangeUnit, files: Classified[
     { capsule: string; action: string; reason: string; what: string[] }
   >();
   const approval = new Map<string, string[]>();
+  const gentle = new Map<
+    string,
+    { capsule: string; action: string; reason: string; what: string[] }
+  >();
   for (const c of files) {
     for (const a of c.actions) {
       const v = decide(actor, a.action, c, project);
-      if (!v.allowed) {
+      if (!v.allowed && gentleRelaxes(v, project.config.mode)) {
+        const key = `${c.capsule}\0${a.action}\0${v.reason}`;
+        const entry = gentle.get(key) ?? {
+          capsule: c.capsule,
+          action: a.action,
+          reason: v.reason,
+          what: [],
+        };
+        entry.what.push(a.detail);
+        gentle.set(key, entry);
+      } else if (!v.allowed) {
         const key = `${c.capsule}\0${a.action}\0${v.reason}`;
         const entry = denied.get(key) ?? {
           capsule: c.capsule,
@@ -169,6 +184,8 @@ function checkPermissions(project: Project, unit: ChangeUnit, files: Classified[
       ),
       d.capsule,
     );
+  for (const g of gentle.values())
+    add(msg.W111(unit.label, actorLabel(actor), g.capsule, g.action, g.reason, g.what), null);
   for (const [capsule, what] of approval)
     add(msg.W108(unit.label, capsule, ownersOf(project.capsules, capsule), what), null);
 }

@@ -25,6 +25,8 @@ export interface HookIndex {
     checkFiles: string[];
     newChecksWithCode: "allow" | "block";
     onError: "open" | "closed";
+    /** C18.5; an index saved before M6a has none, which means strict. */
+    mode?: "strict" | "gentle";
   };
   permissions: Perms;
   capsules: Capsule[];

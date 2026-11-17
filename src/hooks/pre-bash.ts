@@ -22,12 +22,47 @@ const BACK_DIR = /^(popd|Pop-Location)$/i;
 
 type Item = { kind: "cmd"; words: string[] } | { kind: "open" } | { kind: "close" };
 
+/** `<<EOF`, `<<-EOF`, `<<'EOF'`, `<<"EOF"`: the delimiter, and where the command goes on. */
+function heredocDelimiter(command: string, at: number): { delimiter: string; next: number } {
+  let j = at;
+  if (command[j] === "-") j++;
+  while (command[j] === " " || command[j] === "\t") j++;
+  let d = "";
+  let q: string | null = null;
+  for (; j < command.length; j++) {
+    const c = command[j]!;
+    if (q) {
+      if (c === q) q = null;
+      else d += c;
+    } else if (c === "'" || c === '"') q = c;
+    else if (/[\s;|&()<>]/.test(c)) break;
+    else if (c !== "\\") d += c;
+  }
+  return { delimiter: d, next: j };
+}
+
+/** Skip each heredoc body in turn, from `pos`; returns where commands start again. */
+function skipHeredocs(command: string, pos: number, delimiters: string[]): number {
+  let p = pos;
+  for (const d of delimiters) {
+    for (;;) {
+      if (p >= command.length) return command.length;
+      const nl = command.indexOf("\n", p);
+      const line = command.slice(p, nl < 0 ? command.length : nl);
+      p = nl < 0 ? command.length : nl + 1;
+      if (line.replace(/^\t+/, "").replace(/\r$/, "") === d) break;
+    }
+  }
+  return p;
+}
+
 /** Split a command line into simple commands and subshell brackets, in order. */
 function split(command: string): Item[] {
   const out: Item[] = [];
   let cur: string[] = [];
   let w = "";
   let quote: string | null = null;
+  const heredocs: string[] = [];
   const push = () => {
     if (w !== "") cur.push(w);
     w = "";
@@ -43,8 +78,17 @@ function split(command: string): Item[] {
       if (ch === quote) quote = null;
       else w += ch;
     } else if (ch === "'" || ch === '"') quote = ch;
-    else if (/\s/.test(ch)) push();
-    else if (ch === ";" || ch === "|" || ch === "&" || ch === "\n") end();
+    else if (ch === "\n") {
+      end();
+      // A heredoc's body is data, not commands: skip it up to its closing line.
+      if (heredocs.length) i = skipHeredocs(command, i + 1, heredocs.splice(0)) - 1;
+    } else if (ch === "<" && command[i + 1] === "<" && command[i + 2] !== "<") {
+      push();
+      const { delimiter, next } = heredocDelimiter(command, i + 2);
+      if (delimiter) heredocs.push(delimiter);
+      i = next - 1;
+    } else if (/\s/.test(ch)) push();
+    else if (ch === ";" || ch === "|" || ch === "&") end();
     else if (ch === "(" || ch === ")") {
       end();
       out.push({ kind: ch === "(" ? "open" : "close" });
@@ -185,9 +229,35 @@ export function resolvedWrites(command: string, cwd: string): string[] {
   return out;
 }
 
+const CAPSULES_BIN = /(^|[\\/])(capsules(\.cmd|\.exe)?|cli\.js)["']?$/;
+
+/** C18.4, C18.5: commands only a human may run (approving, removing proposals, setting the mode). */
+export function humansOnlyCommand(command: string): string | null {
+  for (const cmd of words(command)) {
+    const i = cmd.findIndex((w) => CAPSULES_BIN.test(w));
+    if (i < 0) continue;
+    const [sub, arg] = cmd.slice(i + 1);
+    if (sub === "review" && (arg === "approve" || arg === "done")) return `capsules review ${arg}`;
+    if (sub === "mode" && arg !== undefined && !arg.startsWith("-")) return `capsules mode ${arg}`;
+  }
+  return null;
+}
+
 export function preBash(input: HookInput, root: string, index: HookIndex): HookResult {
   const command = typeof input.tool_input?.command === "string" ? input.tool_input.command : "";
   const cwd = input.cwd ?? root;
+  const human = humansOnlyCommand(command);
+  if (human)
+    return {
+      kind: "block",
+      reason: hookMsg.blocked(
+        "E027",
+        `\`${human}\` is for humans only.`,
+        [["command", command.length > 120 ? command.slice(0, 117) + "..." : command]],
+        hookMsg.humansOnlyWhy,
+        hookMsg.humansOnlyFix,
+      ),
+    };
   const isCheck = checkFileMatcher(index.config.checkFiles, index.capsules);
   for (const abs of resolvedWrites(command, cwd)) {
     const rel = relative(root, abs).split(sep).join("/");

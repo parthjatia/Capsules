@@ -49,8 +49,15 @@ export interface Perms {
   agents: Record<string, { role: string; capsules: string[]; "blocked-by": string[] }>;
 }
 
+/** Why an action was refused: only `scope` and `blocked-by` relax in gentle mode (C18.5). */
+export type Refusal = "unknown-agent" | "role" | "scope" | "blocked-by";
+
 export type Verdict =
-  { allowed: true; needsApproval: boolean } | { allowed: false; reason: string };
+  { allowed: true; needsApproval: boolean } | { allowed: false; reason: string; why: Refusal };
+
+/** C18.5: in gentle mode these refusals are warnings (W111) instead of E027. */
+export const gentleRelaxes = (v: Verdict, mode: string | undefined): boolean =>
+  mode === "gentle" && !v.allowed && (v.why === "scope" || v.why === "blocked-by");
 
 /** Capsule patterns use `.` between levels (`billing.**`); match them like paths. */
 export function capsuleMatches(capsuleId: string, pattern: string): boolean {
@@ -74,25 +81,39 @@ export function agentMay(
 ): Verdict {
   const spec = perms.agents[name];
   if (!spec)
-    return { allowed: false, reason: `${name} is not listed under agents in permissions.yaml` };
+    return {
+      allowed: false,
+      reason: `${name} is not listed under agents in permissions.yaml`,
+      why: "unknown-agent",
+    };
   const may = perms.roles[spec.role]?.may ?? [];
   if (action === "add-proposals")
     return may.some((a) => a !== "read")
       ? { allowed: true, needsApproval: false }
-      : { allowed: false, reason: `the ${spec.role} role of ${name} is read-only` };
+      : { allowed: false, reason: `the ${spec.role} role of ${name} is read-only`, why: "role" };
   let effective: Action = action;
   if (action === "change-checks" && !may.includes(action) && may.includes("propose-checks"))
     effective = "propose-checks";
   if (!may.includes(effective))
-    return { allowed: false, reason: `the ${spec.role} role of ${name} doesn't include ${action}` };
+    return {
+      allowed: false,
+      reason: `the ${spec.role} role of ${name} doesn't include ${action}`,
+      why: "role",
+    };
   if (!spec.capsules.some((p) => capsuleMatches(capsuleId, p)))
-    return { allowed: false, reason: `${capsuleId} is outside the scope of ${name}` };
+    return { allowed: false, reason: `${capsuleId} is outside the scope of ${name}`, why: "scope" };
   if (scope && !scope.some((p) => capsuleMatches(capsuleId, p)))
     return {
       allowed: false,
       reason: `${capsuleId} is outside this session's scope (${scope.join(", ")})`,
+      why: "scope",
     };
   const blocker = concerns.find((c) => spec["blocked-by"].includes(c));
-  if (blocker) return { allowed: false, reason: `${name} is blocked by the ${blocker} concern` };
+  if (blocker)
+    return {
+      allowed: false,
+      reason: `${name} is blocked by the ${blocker} concern`,
+      why: "blocked-by",
+    };
   return { allowed: true, needsApproval: effective.startsWith("propose-") };
 }

@@ -792,7 +792,7 @@ The `Stop` report also runs, against the base (C6.4), the parts of `capsules che
 
 ### C18.5 Gentle mode (D-034)
 
-- `mode: gentle` turns only these `E027`s into `W111` warnings, in the hooks and in CI: an edit outside the agent's `capsules` scope, and an edit to a file covered by one of its `blocked-by` concerns.
+- `mode: gentle` turns only these `E027`s into `W111` warnings, in the hooks and in CI: an edit outside the agent's `capsules` scope, and an edit to a file covered by one of its `blocked-by` concerns. If the relaxed change needs owner approval (`propose-*`), it is still flagged `W108` as well (D-040).
 - Everything else stays blocked in every mode: changing or deleting existing checks, the one rule (V1, V2), append-only decisions, edits to the guard (`edit-config`, `edit-permissions`, tool-written and generated files), changes to intents, contracts and examples without `propose-*`, and unknown agents.
 - `init` writes `mode: gentle` into a **new** `config.yaml`; a missing `mode` means `strict`, so existing installs don't change.
 - Hooks record each `W111` in `.capsules/_cache/gentle-log.jsonl` (this machine only). `capsules mode` prints the mode and that list ("what strict mode would have blocked"); `capsules mode strict` sets `mode: strict` in `config.yaml`, keeping its comments. Humans only (C18.4).

@@ -386,3 +386,10 @@ Newest at the bottom. Entries are never edited, only superseded by a later entry
   2. Stale links from `code`, `context` and `decisions` stay routine, one line each.
   3. When an owner approves a changed rule (or intent), `capsules review approve` and the rule's own review line suggest: "ask the drafter to update E1 (and N others) first". It names the first node to update and counts the rest.
 - **Interpretation:** approving such a link item says "this example still holds as it is" and re-pins it. If the example needs new text, the drafter edits it (an owner approves it as a changed example), and the link is then refreshed.
+
+## D-040: Gentle mode keeps the owner-approval flag (W108)
+
+- **Date:** 2026-11-17 · **Approved by:** Parth (in the M6b plan: "the gentle-mode gap fix")
+- **Changes:** C18.5 (one sentence; no change to what is blocked)
+- **Why:** the PR #9 test review found that in gentle mode, a rule change (`propose-*`) by an agent outside its scope got only `W111`. The `W108` "an owner must approve" flag was dropped, in the hook and in CI, because the relaxed refusal skipped the approval step. CODEOWNERS still gated it on GitHub, but the report under-said what was needed.
+- **Decision:** a refusal that gentle mode relaxes still carries whether the change needs an owner's approval. The hook prints both notices, and CI reports both `W111` and `W108`. An approval in `approvals.lock` clears `W108` as usual; `W111` stays, because it is about the scope. Strict mode is unchanged (`E027`).

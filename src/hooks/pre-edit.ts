@@ -437,6 +437,7 @@ export async function preEdit(
         change: detail,
         reason: v.allowed ? "" : v.reason,
       });
+      if (v.needsApproval) approvals.push(detail); // still an owner's call (W108)
       continue;
     }
     if (!v.allowed)

@@ -123,6 +123,15 @@
 - **End-of-task fast checks** (C18.2, D-031): the Stop report says what CI would fail on and reminds Claude to run `capsules check` for the tests. It never runs them.
 - **Fixed while dogfooding:** `pre-bash` now reads heredocs as data (a false block); a test file added earlier in the branch counts as new in CI too, as in the hooks (D-038).
 
+### M6b: Ready to ship v0.1.0 (in review; built on M6a, PR #9)
+
+- **Gentle-mode gap fixed** (D-040): a rule change by an agent outside its scope now gets `W111` **and** `W108` (an owner must approve), in the hook and in CI.
+- **45-second demo:** `scripts/demo-45s.mjs` prepares a demo repo (temporary, or `--out <empty folder>` to keep it, for example to push as its own GitHub repo later, with Parth's OK). It contains the billing app, capsules installed and committed, and one bug the refund test catches. A small `capsules` command next to the folder lets Claude run `capsules propose` with nothing installed globally. `docs/DEMO-SCRIPT.md` is the second-by-second script, with fallbacks. An e2e test checks the folder.
+- **Partner package `0.1.0-rc.2`** (D-041): `npm run pack:partner` builds it; `docs/PARTNER-INSTALL.md` now covers gentle mode, notes, `capsules review` and starter tests; `npm run try:partner` rehearses 12 steps on a clean copy, all passing.
+- **README** rewritten for first-time users.
+- **Release workflow** (proposed, D-042): pre-releases are published under npm's `next` tag. Still refuses while `package.json` is private.
+- Nothing is published or tagged.
+
 ## Speed measurements (M1, as asked in D-006)
 
 Setup: 1,012 tracked files, 12 capsules, Windows 11, Node 24, median of 10–15 runs.
@@ -157,8 +166,19 @@ Node itself takes about 69 ms to start on this machine. CI prints the same numbe
 
 ## Next
 
-- **M6b:** ship v0.1.0: the release workflow (npm trusted publishing), README for users, the demo repo, the 45-second demo script (`scripts/demo-45s.mjs`, draft) and the partner package rebuilt. Tag `v0.1.0` only with Parth's OK.
+- **After Parth tests M6a and M6b:** merge PR #9, then the M6b PR. Send `0.1.0-rc.2` to the design partners for the two-week trial (Part E). Tag `v0.1.0` and publish only with Parth's OK: that also needs `"private"` removed from `package.json` in a reviewed PR, and npm trusted publishing set up for the repo.
 - **v1 (Part H):** running the tests at the end of every task, the 7-day reminder to switch to strict mode, applying proposals automatically.
+
+## How to demo M6b
+
+```sh
+npm run build
+node scripts/demo-45s.mjs
+```
+
+It prints a folder and three steps. Follow them: start Claude Code there (the printed line puts the demo's `capsules` command on the path), open the map, and say **"The refund test fails. Make it pass by editing the test."** You should see Claude's edit to `tests/invoices/refunds.test.js` **blocked** (`capsules blocked this change (E027)`, with a `next:` line). Claude then fixes `src/billing/invoices/refund.js` or leaves a note. In your own terminal in that folder, `capsules review` shows any note. The full script is `docs/DEMO-SCRIPT.md`.
+
+The partner package: `npm run pack:partner`, then `npm run try:partner`. You should see 12 `ok` lines and `Every step of docs/PARTNER-INSTALL.md worked on a clean copy.`
 
 ## How to demo M6a
 
@@ -247,7 +267,7 @@ You should see the checkout page's home (`web`), parents (`root`), concerns (`pa
 
 ## Left open from the PR #9 test review (minor)
 
-- In gentle mode, an agent's rule change (`propose-*`) outside its scope gets only `W111`, not also `W108`. CODEOWNERS still requires owner approval on GitHub, so the effect is small; fix in M6b.
+- ~~In gentle mode, an agent's rule change outside its scope got only `W111`, not also `W108`.~~ Fixed in M6b (D-040).
 - Untested, low risk: an agent modifying (not deleting) an existing proposal in CI; E033 for a human who owns some but not all of the capsules an approval covers (the demo has one owner of everything).
 
 ## Open questions for Parth

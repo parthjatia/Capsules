@@ -53,7 +53,8 @@ export interface Perms {
 export type Refusal = "unknown-agent" | "role" | "scope" | "blocked-by";
 
 export type Verdict =
-  { allowed: true; needsApproval: boolean } | { allowed: false; reason: string; why: Refusal };
+  | { allowed: true; needsApproval: boolean }
+  | { allowed: false; reason: string; why: Refusal; needsApproval?: boolean };
 
 /** C18.5: in gentle mode these refusals are warnings (W111) instead of E027. */
 export const gentleRelaxes = (v: Verdict, mode: string | undefined): boolean =>
@@ -100,13 +101,21 @@ export function agentMay(
       reason: `the ${spec.role} role of ${name} doesn't include ${action}`,
       why: "role",
     };
+  // Gentle mode may relax the refusals below (C18.5); a rule change still needs an owner (W108).
+  const needsApproval = effective.startsWith("propose-");
   if (!spec.capsules.some((p) => capsuleMatches(capsuleId, p)))
-    return { allowed: false, reason: `${capsuleId} is outside the scope of ${name}`, why: "scope" };
+    return {
+      allowed: false,
+      reason: `${capsuleId} is outside the scope of ${name}`,
+      why: "scope",
+      needsApproval,
+    };
   if (scope && !scope.some((p) => capsuleMatches(capsuleId, p)))
     return {
       allowed: false,
       reason: `${capsuleId} is outside this session's scope (${scope.join(", ")})`,
       why: "scope",
+      needsApproval,
     };
   const blocker = concerns.find((c) => spec["blocked-by"].includes(c));
   if (blocker)
@@ -114,6 +123,7 @@ export function agentMay(
       allowed: false,
       reason: `${name} is blocked by the ${blocker} concern`,
       why: "blocked-by",
+      needsApproval,
     };
-  return { allowed: true, needsApproval: effective.startsWith("propose-") };
+  return { allowed: true, needsApproval };
 }

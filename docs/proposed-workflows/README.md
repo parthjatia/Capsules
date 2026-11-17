@@ -5,11 +5,11 @@ editing `.github/workflows/`, so an agent can't switch the guard off. These file
 here instead; Parth reviews them and copies them into place in **his own commit** (no
 `Capsule-*` trailers), which makes them an owner's change.
 
-| File           | What it does                          | Changes                                                                                                                                                                                     |
-| -------------- | ------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| `ci.yml`       | Replaces `.github/workflows/ci.yml`   | Adds the `partner-install` job (Ubuntu and Windows): builds the partner package and rehearses `docs/PARTNER-INSTALL.md` on a clean copy. `ci-ok` now waits for it too. Nothing else changes |
-| `capsules.yml` | New: `.github/workflows/capsules.yml` | Runs the Capsules Action on this repo's pull requests and posts the sticky summary comment (C17). Builds capsules from this repo until it is published                                      |
-| `release.yml`  | New: `.github/workflows/release.yml`  | Publishes to npm when a `v*` tag is pushed. Unused until Parth OKs a release: it refuses while `package.json` is `private`                                                                  |
+| File           | What it does                          | Changes                                                                                                                                                                                                                                  |
+| -------------- | ------------------------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `ci.yml`       | Replaces `.github/workflows/ci.yml`   | Adds the `partner-install` job (Ubuntu and Windows): builds the partner package and rehearses `docs/PARTNER-INSTALL.md` on a clean copy. `ci-ok` now waits for it too. Nothing else changes                                              |
+| `capsules.yml` | New: `.github/workflows/capsules.yml` | Runs the Capsules Action on this repo's pull requests and posts the sticky summary comment (C17). Builds capsules from this repo until it is published                                                                                   |
+| `release.yml`  | New: `.github/workflows/release.yml`  | Publishes to npm when a `v*` tag is pushed. Unused until Parth OKs a release: it refuses while `package.json` is `private`. A pre-release version (`0.1.0-rc.2`) is published under the `next` tag, never as the default install (D-042) |
 
 ## To install them (one command, from the repo root)
 

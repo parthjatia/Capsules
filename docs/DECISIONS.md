@@ -386,3 +386,24 @@ Newest at the bottom. Entries are never edited, only superseded by a later entry
   2. Stale links from `code`, `context` and `decisions` stay routine, one line each.
   3. When an owner approves a changed rule (or intent), `capsules review approve` and the rule's own review line suggest: "ask the drafter to update E1 (and N others) first". It names the first node to update and counts the rest.
 - **Interpretation:** approving such a link item says "this example still holds as it is" and re-pins it. If the example needs new text, the drafter edits it (an owner approves it as a changed example), and the link is then refreshed.
+
+## D-040: Gentle mode keeps the owner-approval flag (W108)
+
+- **Date:** 2026-11-17 · **Approved by:** Parth (in the M6b plan: "the gentle-mode gap fix")
+- **Changes:** C18.5 (one sentence; no change to what is blocked)
+- **Why:** the PR #9 test review found that in gentle mode, a rule change (`propose-*`) by an agent outside its scope got only `W111`. The `W108` "an owner must approve" flag was dropped, in the hook and in CI, because the relaxed refusal skipped the approval step. CODEOWNERS still gated it on GitHub, but the report under-said what was needed.
+- **Decision:** a refusal that gentle mode relaxes still carries whether the change needs an owner's approval. The hook prints both notices, and CI reports both `W111` and `W108`. An approval in `approvals.lock` clears `W108` as usual; `W111` stays, because it is about the scope. Strict mode is unchanged (`E027`).
+
+## D-041: The rebuilt partner package is 0.1.0-rc.2
+
+- **Date:** 2026-11-17 · **Approved by:** Parth (M6b plan: "partner package rebuilt")
+- **Changes:** `package.json` and `src/version.ts` version only; no spec change
+- **Why:** the partner package now carries M6a (gentle mode, notes, `capsules review`, starter tests, automatic sessions). A partner who already has the rc.1 file must be able to tell the two apart (`capsules --version`), and the file name in the guide must match.
+- **Decision:** version `0.1.0-rc.2`, still `"private": true`, so it can't be published by accident. `docs/PARTNER-INSTALL.md` describes the M6a behaviour, and `npm run try:partner` rehearses it (gentle mode and the SessionStart hook on a new install; a note reaching `capsules review`). Nothing is published or tagged.
+
+## D-042: Pre-releases are published under npm's `next` tag
+
+- **Date:** 2026-11-17 · **Approved by:** Parth (M6b: workflow changes go to `docs/proposed-workflows/` for him to install)
+- **Changes:** `docs/proposed-workflows/release.yml` only; no spec change
+- **Why:** the version is now `0.1.0-rc.2`. If a pre-release tag were ever pushed, a plain `npm publish` would make the test version what `npx @pyscoparth/capsules` installs by default (or npm 11 would refuse it).
+- **Decision:** the release workflow publishes a version with a `-` (pre-release) under the `next` tag, and a plain version (`0.1.0`) as usual. It still refuses while `package.json` is `private`, and still only runs on a tag Parth pushes.

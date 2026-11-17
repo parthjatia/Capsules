@@ -142,20 +142,38 @@ step(
   map.stdout.split("\n")[1] ?? "",
 );
 
-// Step 8 in the guide: remove, then uninstall.
+// M6a: a new install starts in gentle mode, opens a session per Claude Code session, and an
+// agent's note reaches the human in capsules review.
+const config = readFileSync(join(app, ".capsules", "config.yaml"), "utf8");
+step(
+  9,
+  "new install: gentle mode and the SessionStart hook",
+  /^mode: gentle(\s|$)/m.test(config) && !!settings?.hooks?.SessionStart,
+  /^mode:.*$/m.exec(config)?.[0] ?? "no mode line",
+);
+const note = capsules("propose", "README.md", "--why", "a note for the owner");
+const rev = capsules("review");
+step(
+  10,
+  "capsules propose, then capsules review shows the note",
+  note.status === 0 && rev.status === 0 && rev.stdout.includes("a note for the owner"),
+  note.stdout + note.stderr + rev.stderr,
+);
+
+// Step 9 in the guide: remove, then uninstall.
 const rem = capsules("remove", "--all", "--yes");
 const status = run("git", ["status", "--porcelain", "--untracked-files=all", "--ignored"], {
   cwd: app,
   shell: false,
 }).stdout.trim();
 step(
-  9,
+  11,
   "capsules remove --all leaves their repo exactly as before",
   rem.status === 0 && status === "",
   status,
 );
 const un = run(npm, ["uninstall", "-g", "--prefix", prefix, "@pyscoparth/capsules"]);
-step(10, "npm uninstall -g @pyscoparth/capsules", un.status === 0 && !existsSync(bin), un.stderr);
+step(12, "npm uninstall -g @pyscoparth/capsules", un.status === 0 && !existsSync(bin), un.stderr);
 
 rmSync(tmp, { recursive: true, force: true });
 console.log(

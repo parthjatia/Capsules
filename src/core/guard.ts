@@ -170,6 +170,8 @@ function checkPermissions(project: Project, unit: ChangeUnit, files: Classified[
         };
         entry.what.push(a.detail);
         gentle.set(key, entry);
+        if (v.needsApproval && !approvedNow(project, a.node ?? c.path))
+          approval.set(c.capsule, [...(approval.get(c.capsule) ?? []), a.detail]);
       } else if (!v.allowed) {
         const key = `${c.capsule}\0${a.action}\0${v.reason}`;
         const entry = denied.get(key) ?? {

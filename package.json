@@ -1,6 +1,6 @@
 {
   "name": "@pyscoparth/capsules",
-  "version": "0.1.0-rc.1",
+  "version": "0.1.0-rc.2",
   "description": "A Git-stored, nested record of what each part of an AI-built app is meant to do, and a guard that stops agents from quietly breaking it. Makes no AI or network calls.",
   "private": true,
   "license": "Apache-2.0",

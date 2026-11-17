@@ -714,6 +714,10 @@ Exit codes: `0` OK · `1` problems found (errors, failing checks, violations) ·
 | `capsules propose <address\|check-file> --why <reason> [--text <new text>]` | Leave a proposal or a note for an owner (C18.3) |
 | `capsules review [--base <ref>]` · `review approve <id…>` · `review approve --routine` · `review done <proposal>` | Everything waiting for a human (C18.4). Approving is humans only |
 | `capsules mode [strict\|gentle]` | Show or set `mode` (C18.5). Humans only |
+| `capsules pause [--hours <n>]` · `resume` | Let blocked edits through, logged, on this machine for up to 24 hours (C19.1). Humans only |
+| `capsules log [--limit <n>] [--all]` · `log --false-alarm <n> [--why <reason>]` | What capsules did on this machine (C19.2) |
+| `capsules report [--out <f>]` | One file to share with the maintainers, shown first (C19.3) |
+| `capsules stats [--since <window>]` | Counts from the log, in plain words (C19.5) |
 | `capsules compile [--check]` | Agent files (C10) |
 | `capsules hook <pre-edit\|pre-bash\|stop>` | Called by agent hooks only |
 | `capsules verdict record --file <f>` · `verdict show [commit]` | Verdicts (C13) |
@@ -805,6 +809,42 @@ When the app has few or no tests, `/capsules-draft` may write a few starter chec
 ### C18.7 When blocked, keep going (D-036)
 
 Every hook block message ends with what to do next: don't try another way around the block; carry on with the rest of the task; if a test or rule looks wrong, run `capsules propose <it> --why "<reason>"`. The compiled agent files, the skill and the commands say the same.
+
+## C19. Trial safety (M6c, D-047 to D-049)
+
+Everything in C19 lives on one machine, in `.capsules/_cache/`, and is never committed or sent anywhere. Only capsules writes `_cache/`. The edit hook blocks Edit and Write anywhere in it (`E027`), judged by real path (a symlink into it counts) and ignoring letter case on Windows and macOS. `pre-bash` blocks shell writes to the pause switch (`_cache/pause.json`), the log (`_cache/log.jsonl`), the hook index and `_cache/sessions/`. Deleting the whole `_cache/` folder stays allowed, since it can be rebuilt (B3); that also clears the log and the sessions' one-rule memory, and CI still checks the one rule.
+
+### C19.1 `capsules pause` and `capsules resume` (D-047)
+
+- `capsules pause [--hours <1-24>]` (default 24) turns off **blocking** in the agent hooks on this machine. While paused, `pre-edit` and `pre-bash` still judge every edit; one they would block is let through, logged as `paused`, and shown to the user as a `systemMessage` with the code and reason. Warnings are unchanged.
+- **Nothing else changes.** `capsules check` and CI ignore a pause.
+- **It ends by itself.** A pause ends at its `until` time, and never more than 24 hours after it started, whatever the file says. The first hook after the end logs an automatic `resume`, and the user is told once (in a block's reason or a notice, then in the `Stop` report or at the next session start).
+- **Reminders.** While paused, `SessionStart`, `Stop` and every notice from `pre-edit` and `pre-bash` say so, with the end time and `capsules resume`.
+- `capsules resume` turns blocking back on at once.
+- **Humans only.** Both refuse to run in an agent's shell (C18.4), and `pre-bash` blocks them.
+
+### C19.2 `capsules log` (D-048)
+
+- Hooks and commands append one JSON line per event to `_cache/log.jsonl`. The kinds are `block`, `warning` (W111, W108), `paused`, `proposal`, `approval`, `false-alarm`, `pause`, `resume` and `error` (an internal error in capsules).
+- Each line holds the time, kind, code, tool, project-relative file or address, agent and a one-line summary in capsules' own words. It never holds the edit's text, the shell command, or a proposal's reasons or text.
+- **Numbers.** Entry `#n` is line `n` of the log, so numbers never change.
+- `capsules log [--limit <n>] [--all] [--json]` lists the last 50 entries, newest first.
+- `capsules log --false-alarm <n> [--why <reason>]` marks a block or warning as a false alarm (humans only, as C19.1).
+- **Older installs.** The gentle-mode warnings rc.2 kept in `_cache/gentle-log.jsonl` are still read by `capsules mode` (C18.5); new ones go to the log.
+
+### C19.3 `capsules report`
+
+- Writes one plain-text file for the user to send to the maintainers, `_cache/capsules-report.txt` (or `--out <file>`), then prints the whole file, says nothing was sent, and asks the user to read it before sharing it. `--dry-run` prints it without writing.
+- **What it holds:** the capsules, Node and Git versions; the operating system; whether paused; whether the hooks are installed and the program they call still exists; mode; counts of capsules and nodes; the people and agents in `permissions.yaml` as counts and agent names with roles only; diagnostic codes; `config.yaml` as parsed (comments dropped); the last 7 days' stats; every internal error (last 20); and the last 50 log entries.
+- **What it never holds:** code, capsule text, proposals' wording, people's names or email addresses. As a last step, anything that looks like an email address is replaced, and the project folder and home folder are replaced by `<project>` and `~`.
+
+### C19.4 Upgrades (D-049)
+
+Installing a newer package over an older one keeps `.capsules/` (capsules, settings, `approvals.lock`, proposals) and the user's Claude Code settings. The hooks call the CLI at the path where npm installs it, which an upgrade doesn't change, so they keep working at once. Running `capsules init` again afterwards updates capsules' own agent files and changes nothing of the user's. `capsules remove` still restores the settings recorded by the older version. A test upgrades from the 0.1.0-rc.2 package file, kept as a fixture.
+
+### C19.5 `capsules stats [--since <n>d|<n>h]`
+
+Counts from the log over the window (default `7d`), in plain words: edits blocked (by code), would-have-been-blocked while paused, warnings (by code), proposals, approvals, false alarms, pauses, internal errors, and the most blocked files. `--json` gives the same counts.
 
 ---
 
@@ -899,6 +939,7 @@ Each milestone must be a finished, demoable product. **Don't start the next mile
 | M5 | Map | HTML, Mermaid and JSON formats | Open `map.html`: the tree, concerns and a working file search |
 | M6a | Zero friction | Automatic sessions, keep-going block messages, `propose`, `review` and `approvals.lock`, gentle mode, starter checks, end-of-task fast checks (C18); the GitHub Action with the sticky summary; the partner package | Start Claude Code in the demo: a session opens by itself; a blocked edit says how to carry on; `capsules review` lists what waits for you |
 | M6b | Ship v0.1.0 | Release workflow, README, demo repo, a 45-second demo script, partner package rebuilt | Parth approves → tag `v0.1.0` (never without his OK) |
+| M6c | Trial safety (C19) | `pause`/`resume`, `log`, `report`, `stats`, a tested upgrade from 0.1.0-rc.2; partner guide's "If something goes wrong"; package 0.1.0-rc.3 | Pause, see an edit let through and logged, `capsules report` shows the file |
 
 **First real test after M4:** install on Parth's own app and two design partners' repos for two weeks. Track:
 

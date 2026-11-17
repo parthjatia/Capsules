@@ -1,5 +1,7 @@
 import { Command, CommanderError } from "commander";
-import { UsageError } from "../core/project.js";
+import { log, pause, report, resume, stats, type LogOptions } from "./commands/trial.js";
+import { appendLog, errorSummary } from "../core/activity.js";
+import { findProjectRoot, UsageError } from "../core/project.js";
 import { GitError } from "../git/git.js";
 import { VERSION } from "../version.js";
 import { runHook } from "../hooks/main.js";
@@ -231,6 +233,53 @@ export function buildProgram(io: Io, setExit: (code: number) => void): Command {
     );
 
   program
+    .command("pause")
+    .description(
+      "trial safety: let Claude's edits through (still logged) on this machine for up to 24 hours (humans only)",
+    )
+    .option("--hours <n>", "how long, 1 to 24 (default 24)")
+    .option("--dry-run", "say what would change, without writing")
+    .option("--json", "print JSON instead of text")
+    .action((opts: { hours?: string; dryRun?: boolean; json?: boolean }) =>
+      setExit(pause(io, opts)),
+    );
+  program
+    .command("resume")
+    .description("turn capsules back on after `capsules pause` (humans only)")
+    .option("--dry-run", "say what would change, without writing")
+    .option("--json", "print JSON instead of text")
+    .action((opts: { dryRun?: boolean; json?: boolean }) => setExit(resume(io, opts)));
+  program
+    .command("log")
+    .description("every block, warning, proposal, approval and pause on this machine, newest first")
+    .option("--all", "show every entry (default: the last 50)")
+    .option("--limit <n>", "show the last n entries")
+    .option("--false-alarm <n>", "mark entry #n as a false alarm (humans only)")
+    .option("--why <reason>", "with --false-alarm: what was wrong about it")
+    .option("--dry-run", "with --false-alarm: say what would be logged, without writing")
+    .option("--json", "print JSON instead of text")
+    .action((opts: LogOptions) => setExit(log(io, opts)));
+  program
+    .command("report")
+    .description(
+      "write one file to send to Parth: versions, settings, the last 50 log entries, internal errors; shows it first",
+    )
+    .option("--out <file>", "write it here (default .capsules/_cache/capsules-report.txt)")
+    .option("--dry-run", "show the report without writing it")
+    .option("--json", "print JSON instead of text")
+    .action((opts: { out?: string; dryRun?: boolean; json?: boolean }) =>
+      setExit(report(io, opts)),
+    );
+  program
+    .command("stats")
+    .description(
+      "counts of blocks, warnings, proposals, approvals and false alarms, in plain words",
+    )
+    .option("--since <window>", "how far back, like 7d or 12h (default 7d)")
+    .option("--json", "print JSON instead of text")
+    .action((opts: { since?: string; json?: boolean }) => setExit(stats(io, opts)));
+
+  program
     .command("map")
     .description(
       "draw the map: areas, concerns, rules, what needs attention, and a file search (HTML, offline)",
@@ -287,9 +336,26 @@ export async function main(argv: string[], io: Io = processIo()): Promise<number
       io.err(`error  ${err.message}\n`);
       return EXIT.problems;
     }
+    logInternalError(io.cwd, argv, err);
     io.err(
       `internal error  capsules crashed. This is a bug in capsules, not in your project.\n  ${err instanceof Error ? (err.stack ?? err.message) : String(err)}\n`,
     );
     return EXIT.internal;
+  }
+}
+
+/** C19.3: a crash is logged on this machine (command name and message only), for `capsules report`. */
+function logInternalError(cwd: string, argv: string[], err: unknown): void {
+  try {
+    const root = findProjectRoot(cwd);
+    const sub = argv.slice(2).find((a) => !a.startsWith("-")) ?? "";
+    appendLog(root, {
+      kind: "error",
+      tool: `capsules ${sub}`.trim(),
+      summary: errorSummary(err),
+      version: VERSION,
+    });
+  } catch {
+    // not in a project, or the log can't be written: the crash message is enough
   }
 }

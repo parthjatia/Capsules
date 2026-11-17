@@ -1,5 +1,6 @@
 // `capsules review` · `review approve <id…>` · `review approve --routine` · `review done <proposal>`
 // (C18.4, D-033). Listing is for anyone; approving and removing proposals is humans only.
+import { appendLog } from "../../core/activity.js";
 import { existsSync, mkdirSync, readFileSync, rmSync, writeFileSync } from "node:fs";
 import { dirname, join } from "node:path";
 import { APPROVALS_FILE, serialiseApprovals } from "../../core/approvals.js";
@@ -82,6 +83,7 @@ export function reviewApprove(
     : ids.map((id) => shown.find((s) => s.id === id) ?? { id, key: "", approve: null });
 
   const done: string[] = [];
+  const logged: Approval[] = [];
   const problems: string[] = [];
   const approvals = project.approvals;
   const lock = project.lockOnDisk;
@@ -111,6 +113,7 @@ export function reviewApprove(
     if (a.type === "link") lockChanged = true;
     else approvalsChanged = true;
     done.push(`${w.id}  ${item.title}`);
+    logged.push(a);
   }
   if (!opts.dryRun) {
     if (approvalsChanged)
@@ -120,6 +123,24 @@ export function reviewApprove(
       );
     if (lockChanged && lock)
       writeFileSync(join(project.root, ...LOCK_FILE.split("/")), serializeLock(lock));
+    // C19.2: what was approved, by address or path only.
+    for (const a of logged)
+      appendLog(
+        project.root,
+        {
+          kind: "approval",
+          tool: "capsules review approve",
+          file: a.type === "node" ? a.addr : a.type === "file" ? a.path : a.key,
+          agent: "a human",
+          summary:
+            a.type === "node"
+              ? `approved ${a.addr}`
+              : a.type === "file"
+                ? `approved the test ${a.path}`
+                : `approved a stale link: ${a.key}`,
+        },
+        env,
+      );
   }
 
   // A friendly early warning: CI checks the commit's author owns these capsules (E033).

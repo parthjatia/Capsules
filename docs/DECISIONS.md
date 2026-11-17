@@ -407,3 +407,22 @@ Newest at the bottom. Entries are never edited, only superseded by a later entry
 - **Changes:** `docs/proposed-workflows/release.yml` only; no spec change
 - **Why:** the version is now `0.1.0-rc.2`. If a pre-release tag were ever pushed, a plain `npm publish` would make the test version what `npx @pyscoparth/capsules` installs by default (or npm 11 would refuse it).
 - **Decision:** the release workflow publishes a version with a `-` (pre-release) under the `next` tag, and a plain version (`0.1.0`) as usual. It still refuses while `package.json` is `private`, and still only runs on a tag Parth pushes.
+
+## D-047: Pause, for design partners' trials (C19.1)
+
+- **Date:** 2026-11-17 · **Approved by:** Parth (asked for M6c: "pause / resume: humans only… auto-resumes after 24 hours")
+- **Why:** a partner whose work is blocked by a false alarm needs a way out that isn't `capsules remove`, and that leaves a record of what would have been blocked.
+- **Decision:** `capsules pause [--hours 1-24]` turns off blocking in the agent hooks on one machine; every edit is still judged and logged (`paused`). `check` and CI ignore it. It ends by itself after at most 24 hours, even if the file says later. Humans only: refused in agent shells, blocked by `pre-bash`, and the pause file and the log are protected from the edit hook and from shell writes. A fresh reviewer found three ways round that (a differently-cased name such as `Pause.json` on Windows and macOS, a symlink into `_cache`, and a pause file whose start is in the future) and one older gap (the hook index and the sessions' one-rule memory in `_cache` could be rewritten with the Edit tool). So the Edit and Write tools are now blocked anywhere in `_cache/`, by real path and ignoring case; `pre-bash` protects the pause file, the log, the hook index and sessions; a pause starting in the future is ignored. Deleting the whole `_cache/` stays allowed, as B3 and an existing test say.
+- **Numbering:** D-043 to D-046 are taken on the unmerged `m6h` branch, so M6c starts at D-047.
+
+## D-048: One log on each machine, and false-alarm notes (C19.2, C19.3, C19.5)
+
+- **Date:** 2026-11-17 · **Approved by:** Parth (M6c: `log`, `report`, `stats --since 7d`, "false-alarm notes")
+- **Why:** partners were asked to keep notes by hand (PARTNER-INSTALL step 8). The tool can keep them, and give Parth one file to read.
+- **Decision:** `_cache/log.jsonl`, one JSON line per block, warning, paused edit, proposal, approval, false alarm, pause, resume and internal error, numbered by line. It never stores edit text, shell commands or proposals' wording. `capsules log --false-alarm <n>` is how a human marks a false alarm; the request named false-alarm notes in `stats` but no way to make them, so this is the smallest one. `capsules report` writes a text file and prints it in full before anything else, and scrubs emails and local folders as a last step. Gentle-mode warnings move into the log; `capsules mode` still reads the old `gentle-log.jsonl`, so an upgrade loses nothing.
+
+## D-049: Upgrades keep everything, and the package is 0.1.0-rc.3 (C19.4)
+
+- **Date:** 2026-11-17 · **Approved by:** Parth (M6c: "add a test that upgrades from the current package")
+- **Decision:** the partner package becomes `0.1.0-rc.3`. The 0.1.0-rc.2 package file partners have is kept as a test fixture (`test/fixtures/packages/`, 362 KB), and `test/e2e/m6c-upgrade.test.ts` installs it, uses it, replaces it with this build in the same folder (as `npm install -g` does) and checks everything is kept. Re-running `capsules init` after an upgrade is the documented step: it is safe and updates capsules' own agent files.
+- **Not included:** M6h's fixes (YAML alias bombs, short paths, symlinks) are on the unmerged `m6h` branch; rc.3 gets them only if `m6h` merges first.

@@ -642,6 +642,7 @@ export const reviewMsg = {
     lock: boolean,
     notMine: string[],
     dry: boolean,
+    next: string[] = [],
   ) => {
     const out: string[] = [];
     if (done.length)
@@ -662,7 +663,15 @@ export const reviewMsg = {
         "",
         `Note: your Git email isn't an owner of ${notMine.join(", ")} in permissions.yaml, so CI will reject this approval (E033).`,
       );
+    if (next.length) out.push("", ...next);
     return out.join("\n") + "\n";
+  },
+  updateFirst: (rule: string, update: string[], others: number) => {
+    const more = update.length - 1 + others;
+    return (
+      `Next: ask the drafter to update ${update[0]}${more ? ` (and ${more} other${more === 1 ? "" : "s"})` : ""} first, to match ${rule}.\n` +
+      "  Then run `capsules review` again: each one shows the new rule next to what it says, for you to approve."
+    );
   },
   noProposal: (id: string) =>
     `error  There is no proposal ${id}.\n  fix:  run \`capsules review\` to see the open proposals and their names.\n`,

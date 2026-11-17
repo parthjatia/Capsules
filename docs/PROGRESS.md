@@ -167,7 +167,7 @@ npm run build
 node scripts/demo-m6a.mjs
 ```
 
-It runs in a throwaway copy of the demo app and prints seven numbered steps. You should see: (1) `capsules: opened session cc-… for this Claude Code session`; (2) the refund code edit `allowed`, then the test edit `BLOCKED` with a `next:` line telling Claude to carry on; (3) `Wrote .capsules/_proposals/…` (Claude's note for you); (4) gentle mode: frontend-agent's edit on a payments file is `allowed, with:` a `W111` warning, and `capsules mode` lists it; (5) the end-of-task line `capsules: 1 proposal waiting for you, 4 stale links. Next: run capsules review.`; (6) `capsules review` showing the changed rule before and after, then the note, then routine items; (7) approving refused in Claude's shell, then `Approved: r1` in yours, and the new line in `approvals.lock`.
+It runs in a throwaway copy of the demo app and prints seven numbered steps. You should see: (1) `capsules: opened session cc-… for this Claude Code session`; (2) the refund code edit `allowed`, then the test edit `BLOCKED` with a `next:` line telling Claude to carry on; (3) `Wrote .capsules/_proposals/…` (Claude's note for you); (4) gentle mode: frontend-agent's edit on a payments file is `allowed, with:` a `W111` warning, and `capsules mode` lists it; (5) the end-of-task line `capsules: 1 proposal waiting for you, 4 stale links. Next: run capsules review.`; (6) `capsules review` showing the changed rule before and after, then the note, then **example E1** (its rule before and now, and what E1 says, D-039), then routine items; (7) approving refused in Claude's shell, then `Approved: r1` in yours, with `Next: ask the drafter to update billing.invoices#E1 (and 3 others) first`, and the new line in `approvals.lock`.
 
 ## How to demo M5
 

@@ -422,6 +422,51 @@ describe("capsules review (C18.4)", () => {
     expect(cli(dir, {}, "check", "--no-run", "--base", "main").stdout).not.toContain("E033");
   });
 
+  it("a stale link from an example is not routine: read in full, never in --routine, and named after a rule is approved (D-039)", () => {
+    const dir = demoHistory();
+    const C1 = ".capsules/billing/invoices.md";
+    editFile(
+      dir,
+      C1,
+      "for the same customer and period.",
+      "for the same customer, period and plan.",
+    );
+    expect(cli(dir, {}, "lock").status).toBe(0);
+    commit(dir, "invoices per plan");
+
+    const [read, routine] = review(dir).stdout.split("Routine (one line each):");
+    expect(read).toContain(
+      "Stale example billing.invoices#E1: it shows billing.invoices#C1, which changed",
+    );
+    expect(read).toContain(
+      "billing.invoices#C1 before: Never create two invoices for the same customer and period.",
+    );
+    expect(read).toContain(
+      "billing.invoices#C1 now:    Never create two invoices for the same customer, period and plan.",
+    );
+    expect(read).toContain("billing.invoices#E1 says: Customer A, period 2026-03");
+    expect(read).toMatch(
+      /Changed contract billing\.invoices#C1[\s\S]*ask the drafter to update billing\.invoices#E1 \(and 3 others\) first/,
+    );
+    expect(routine).toContain("Stale link: billing.invoices#D7 (serves billing.invoices#C1)");
+    expect(routine).not.toContain("#E1");
+
+    // --routine re-pins the decision, code and context links, and leaves the example's alone.
+    const rt = cli(dir, {}, "review", "approve", "--routine", "--base", "main");
+    expect(rt.stdout).toContain("billing.invoices#D7");
+    expect(rt.stdout).not.toContain("billing.invoices#E1");
+    const again = review(dir).stdout;
+    expect(again).toContain("Stale example billing.invoices#E1");
+    expect(again).not.toContain("Stale link: billing.invoices#D7");
+
+    // Approving the rule says what to do next: update the example first.
+    const id = /(r\d+)\s+Changed contract billing\.invoices#C1/.exec(again)![1]!;
+    const ap = cli(dir, {}, "review", "approve", id, "--base", "main");
+    expect(ap.stdout).toContain(
+      "Next: ask the drafter to update billing.invoices#E1 first, to match billing.invoices#C1.",
+    );
+  });
+
   it("in GitHub Actions, E033 judges the pull request's author, not the commit's email", () => {
     const dir = demoHistory();
     riskyChange(dir);

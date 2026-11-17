@@ -778,9 +778,9 @@ The `Stop` report also runs, against the base (C6.4), the parts of `capsules che
 ### C18.4 `capsules review` and `approvals.lock` (D-033)
 
 - `capsules review` lists everything waiting for a human, in plain words, versus the base (C6.4) plus uncommitted changes:
-  1. **In full, first (risky):** changed or new intents, contracts and examples (old and new text), changed or deleted existing checks (the diff), new checks still unreviewed (the check and its file), and open proposals (the reason and suggested text).
-  2. **One line each, last (routine):** stale links, stale prompts, assumptions past review, orphans, new decisions and context.
-- Each item has a short id (`r1`, `r2`, …). `capsules review approve <id…>` approves those items; `capsules review approve --routine` approves only the routine items and never a rule, intent, example or check. Approving a stale link re-pins that one link. Approving a risky item records it in `approvals.lock`.
+  1. **In full, first (risky):** changed or new intents, contracts and examples (old and new text), changed or deleted existing checks (the diff), new checks still unreviewed (the check and its file), open proposals (the reason and suggested text), and stale links **from** an intent, contract or example (the changed target's text before and now, and what the stale node says; D-039).
+  2. **One line each, last (routine):** stale links from `code`, `context` and `decision` nodes only, stale prompts, assumptions past review, orphans, new decisions and context.
+- Each item has a short id (`r1`, `r2`, …). `capsules review approve <id…>` approves those items; `capsules review approve --routine` approves only the routine items and never a rule, intent, example or check. Approving a stale link re-pins that one link. Approving a risky item records it in `approvals.lock`. After a changed intent or contract is approved, `review approve` names the examples and other nodes still pointing at its old text and suggests asking the drafter to update them first (D-039).
 - `.capsules/approvals.lock` is tool-written, line-based, sorted, LF:
   ```text
   # approvals.lock v1. Written by `capsules review approve`. Do not edit by hand.

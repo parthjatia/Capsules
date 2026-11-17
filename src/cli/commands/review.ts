@@ -9,7 +9,7 @@ import { humanFromEmail, isOwner } from "../../core/identity.js";
 import { LOCK_FILE, serializeLock } from "../../core/lock.js";
 import { findProjectRoot, loadProject, type Project } from "../../core/project.js";
 import { PROPOSALS_DIR } from "../../core/proposals.js";
-import { buildReview, type Approval, type ReviewItem } from "../../core/review.js";
+import { buildReview, staleDependents, type Approval, type ReviewItem } from "../../core/review.js";
 import { configuredEmail } from "../../git/history.js";
 import { toJson } from "../../report/json.js";
 import { reviewMsg } from "../../report/messages.js";
@@ -136,11 +136,29 @@ export function reviewApprove(
     (c) => !(me.kind === "human" && isOwner(me.name, c, project.capsules, project.permissions)),
   );
 
+  // D-039: after a rule change is approved, its examples (and other dependents) come next.
+  const next = wanted
+    .map((w) => w.approve)
+    .filter((a): a is Extract<Approval, { type: "node" }> => !!a && a.type === "node")
+    .filter((a) => done.some((d) => d.includes(a.addr)))
+    .flatMap((a) => {
+      const { update, other } = staleDependents(project, a.addr);
+      return update.length ? [reviewMsg.updateFirst(a.addr, update, other.length)] : [];
+    });
+
   if (opts.json)
-    io.out(toJson("review-approve", { approved: done, problems, dryRun: !!opts.dryRun }));
+    io.out(toJson("review-approve", { approved: done, problems, next, dryRun: !!opts.dryRun }));
   else
     io.out(
-      reviewMsg.approved(done, problems, approvalsChanged, lockChanged, notMine, !!opts.dryRun),
+      reviewMsg.approved(
+        done,
+        problems,
+        approvalsChanged,
+        lockChanged,
+        notMine,
+        !!opts.dryRun,
+        next,
+      ),
     );
   return problems.length ? EXIT.problems : EXIT.ok;
 }

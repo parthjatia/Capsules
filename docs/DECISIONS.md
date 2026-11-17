@@ -375,3 +375,14 @@ Newest at the bottom. Entries are never edited, only superseded by a later entry
 - **Interpretations:**
   1. Such a file is still "unreviewed" until an owner approves it, and `capsules review` shows it in full at its final version, so a test weakened before anyone reviewed it is still in front of the human.
   2. This applies to check **files**. Check **nodes** in capsule files are unchanged: changing an existing `check` node still needs `change-checks`.
+
+## D-039: A stale link from an example or an intent is not routine
+
+- **Date:** 2026-11-17 · **Approved by:** Parth (after running the M6a demo)
+- **Changes:** C18.4
+- **Why:** an example is what a human approves to say "this is what the rule means". When the rule changes, an example that still shows the old meaning is a risky mismatch. `capsules review approve --routine` could re-pin its link without anyone reading it.
+- **Decision:**
+  1. A stale link whose source is any node other than `code`, `context` or `decision` (in practice an example, contract or intent) is listed under "Read these". It shows the changed target's text at the base and now, and what the stale node says. `--routine` never includes it.
+  2. Stale links from `code`, `context` and `decisions` stay routine, one line each.
+  3. When an owner approves a changed rule (or intent), `capsules review approve` and the rule's own review line suggest: "ask the drafter to update E1 (and N others) first". It names the first node to update and counts the rest.
+- **Interpretation:** approving such a link item says "this example still holds as it is" and re-pins it. If the example needs new text, the drafter edits it (an owner approves it as a changed example), and the link is then refreshed.

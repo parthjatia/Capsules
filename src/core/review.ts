@@ -46,9 +46,48 @@ const firstLines = (text: string, max = MAX_LINES) => {
 };
 const nodeText = (n: CapsuleNode) => n.prose.trim() || "(no text)";
 
+/** Stale links from these node types stay routine; from any other (examples, contracts…) they are risky (D-039). */
+const ROUTINE_LINK_SOURCES = new Set(["code", "context", "decision"]);
+
+function nodeAt(project: Project, addr: string): CapsuleNode | null {
+  const [cap, id] = addr.split("#");
+  return project.capsules.find((c) => c.id === cap)?.nodes.find((n) => n.id === id) ?? null;
+}
+
+function staleReport(project: Project) {
+  return project.lockOnDisk
+    ? splitReplaced(staleLinks(project.lockOnDisk, project.current), project.capsules).report
+    : [];
+}
+
+/**
+ * After a rule changes: the nodes whose links to it are now stale, the ones to update first
+ * (examples, contracts, intents…) and the rest (code, context, decisions), each sorted.
+ */
+export function staleDependents(
+  project: Project,
+  addr: string,
+): { update: string[]; other: string[] } {
+  const update: string[] = [];
+  const other: string[] = [];
+  for (const s of staleReport(project)) {
+    if (s.to !== addr) continue;
+    const t = nodeAt(project, s.from)?.type;
+    (t && !ROUTINE_LINK_SOURCES.has(t) ? update : other).push(s.from);
+  }
+  return { update: [...new Set(update)].sort(), other: [...new Set(other)].sort() };
+}
+
 function parseAt(text: string | null, path: string): Capsule | null {
   const cap = capsuleFromPath(path);
   return cap && text !== null ? parseCapsuleFile(text, path, cap.id, cap.kind).capsule : null;
+}
+
+function ruleHint(project: Project, addr: string): string {
+  const { update, other } = staleDependents(project, addr);
+  if (!update.length) return "approve it if this is what you mean.";
+  const more = update.length - 1 + other.length;
+  return `approve it if this is what you mean, then ask the drafter to update ${update[0]}${more ? ` (and ${more} other${more === 1 ? "" : "s"})` : ""} first.`;
 }
 
 export function buildReview(project: Project, base: Base, units: ChangeUnit[]): ReviewItem[] {
@@ -98,7 +137,7 @@ export function buildReview(project: Project, base: Base, units: ChangeUnit[]): 
           group: "risky",
           title: `${verb} ${t === "check" ? "check" : t} ${addr}${unreviewed.has(`check node ${addr}`) ? " (unreviewed: added with the code it judges, or by the drafter)" : ""}`,
           detail: [...detail, ...(nc.change !== "removed" ? fields : [])],
-          hint: "approve it if this is what you mean.",
+          hint: ruleHint(project, addr),
           approve: { type: "node", addr, hash },
         });
       } else if (t === "decision") {
@@ -187,17 +226,53 @@ export function buildReview(project: Project, base: Base, units: ChangeUnit[]): 
     });
 
   // 4. Routine: stale links (approving re-pins one), stale prompts, assumptions, orphans.
+  // D-039: a stale link from an example, contract or intent is risky: read it in full.
+  const textAtBase = (addr: string): string | null => {
+    const cap = project.capsules.find((c) => c.id === addr.split("#")[0]);
+    if (!cap || !from) return null;
+    const n = parseAt(contents.get(from, cap.file), cap.file)?.nodes.find(
+      (x) => x.id === addr.split("#")[1],
+    );
+    return n ? nodeText(n) : null;
+  };
   if (project.lockOnDisk) {
-    for (const s of splitReplaced(staleLinks(project.lockOnDisk, project.current), project.capsules)
-      .report)
-      routine.push({
-        key: `link ${linkKey(s.from, s.type, s.to)}`,
-        group: "routine",
-        title: `Stale link: ${s.from} (${s.type} ${s.to}) was written before ${s.to} changed`,
-        detail: [],
-        hint: `check ${s.from} still holds; approving re-pins this link.`,
-        approve: { type: "link", key: linkKey(s.from, s.type, s.to), hash: s.current },
+    for (const s of staleReport(project)) {
+      const key = `link ${linkKey(s.from, s.type, s.to)}`;
+      const approve: Approval = {
+        type: "link",
+        key: linkKey(s.from, s.type, s.to),
+        hash: s.current,
+      };
+      const src = nodeAt(project, s.from);
+      if (!src || ROUTINE_LINK_SOURCES.has(src.type)) {
+        routine.push({
+          key,
+          group: "routine",
+          title: `Stale link: ${s.from} (${s.type} ${s.to}) was written before ${s.to} changed`,
+          detail: [],
+          hint: `check ${s.from} still holds; approving re-pins this link.`,
+          approve,
+        });
+        continue;
+      }
+      const target = nodeAt(project, s.to);
+      const now = target ? nodeText(target) : "(removed)";
+      const before = textAtBase(s.to);
+      risky.push({
+        key,
+        group: "risky",
+        title: `Stale ${src.type} ${s.from}: it ${s.type === "serves" || s.type === "shows" ? s.type : `links (${s.type}) to`} ${s.to}, which changed`,
+        detail: [
+          before !== null && before !== now
+            ? `${s.to} before: ${before}`
+            : `${s.to} changed before this branch; its old text is in Git history.`,
+          `${s.to} now:    ${now}`,
+          `${s.from} says: ${nodeText(src)}`,
+        ],
+        hint: `check ${s.from} still matches. If not, ask the drafter to update it first (or run \`capsules propose\`); approving keeps it as it is and re-pins this link.`,
+        approve,
       });
+    }
     for (const s of stalePrompts(project.lockOnDisk, project.current))
       routine.push({
         key: `prompt ${s.address}`,

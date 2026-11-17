@@ -6,7 +6,7 @@ Thank you for trying Capsules before it is public. This guide takes about 15 min
 
 **What it touches.** Only a new `.capsules/` folder and a few files under `.claude/` (commands, two helper agents, a skill, rule files) plus your local Claude Code settings. It never changes your app's code, `package.json`, lockfiles or build settings. Step 6 proves it.
 
-You received two things: this guide and a file named `pyscoparth-capsules-0.1.0-rc.2.tgz`. Please don't share the file; it is a private test version.
+You received two things: this guide and a file named `pyscoparth-capsules-0.1.0-rc.3.tgz`. Please don't share the file; it is a private test version.
 
 ---
 
@@ -27,8 +27,8 @@ You also need **Claude Code** for the agent parts (steps 7 and 8).
 
 In the folder where you saved the file:
 
-- macOS or Linux: `shasum -a 256 pyscoparth-capsules-0.1.0-rc.2.tgz`
-- Windows (PowerShell): `Get-FileHash pyscoparth-capsules-0.1.0-rc.2.tgz -Algorithm SHA256`
+- macOS or Linux: `shasum -a 256 pyscoparth-capsules-0.1.0-rc.3.tgz`
+- Windows (PowerShell): `Get-FileHash pyscoparth-capsules-0.1.0-rc.3.tgz -Algorithm SHA256`
 
 The long code it prints should match the one Parth sent you with the file.
 
@@ -37,13 +37,15 @@ The long code it prints should match the one Parth sent you with the file.
 Still in the folder with the file:
 
 ```sh
-npm install -g ./pyscoparth-capsules-0.1.0-rc.2.tgz
+npm install -g ./pyscoparth-capsules-0.1.0-rc.3.tgz
 capsules --version
 ```
 
-You should see `0.1.0-rc.2`. (The install downloads a few small open-source libraries Capsules uses from npm, as any npm install does. Installing it globally, rather than with `npx`, keeps the checks fast while you work.)
+You should see `0.1.0-rc.3`. (The install downloads a few small open-source libraries Capsules uses from npm, as any npm install does. Installing it globally, rather than with `npx`, keeps the checks fast while you work.)
 
 If `npm install -g` says "permission denied" on macOS or Linux, don't use `sudo`; tell Parth, and he'll send a one-line fix for your setup.
+
+**Upgrading from an earlier test version** (for example `0.1.0-rc.2`): install the new file the same way, over the old one. Then, in each project where you use Capsules, run `capsules init` once more and type `y`. Your capsules, approvals, notes, settings and Claude Code settings are all kept; only Capsules' own files under `.claude/` are refreshed. Restart Claude Code afterwards.
 
 ## 4. Commit your work first
 
@@ -140,12 +142,58 @@ Use Claude Code as you normally do. Capsules works in the background:
 - `capsules mode` shows what strict mode would have blocked so far. When that list looks right, switch with `capsules mode strict`, and commit `.capsules/config.yaml`.
 - `/capsules-map` explains the map in plain words; `/capsules-work <area>` starts focused work on one area.
 
-**Please keep short notes** each time Capsules blocks or warns, and send them to Parth once a week:
+**Once a week, send Parth a report.** Capsules keeps its own notes of every block, warning and note on your computer, so you don't have to. In your own terminal:
 
-| Date | What you or Claude tried | What Capsules said (block, warning or note) | Was it right? |
-| ---- | ------------------------ | ------------------------------------------- | ------------- |
+```sh
+capsules stats          # this week in plain words: blocks, warnings, notes, approvals, false alarms
+capsules report         # writes one file for Parth and shows it to you first
+```
 
-Also useful: anything confusing, anything slow, and whether Claude kept the capsules up to date without being asked. Capsules sends nothing by itself; you choose what to share. Your capsules describe your app, so look before you share them.
+`capsules report` prints the whole file and where it saved it. It has versions, your Capsules settings and the last 50 things Capsules did. It never contains your code, your capsules' text, people's names or email addresses, but it does name files (like `src/billing/refund.js`). Read it, and send the file only if you're happy to.
+
+Also useful: anything confusing, anything slow, and whether Claude kept the capsules up to date without being asked. Capsules sends nothing by itself; you choose what to share.
+
+## If something goes wrong
+
+All of these run in **your own terminal**, not inside Claude Code; Capsules refuses `pause`, `resume` and `--false-alarm` when Claude runs them. None of them sends anything anywhere.
+
+**Capsules blocked something it shouldn't have.** See what happened, newest first:
+
+```sh
+capsules log
+```
+
+Each line has a number like `#12`. Mark the wrong one, so Parth sees it:
+
+```sh
+capsules log --false-alarm 12 --why "the test really was out of date"
+```
+
+**Capsules is in your way and you need to get on with your work.** Pause it on this computer:
+
+```sh
+capsules pause              # for 24 hours; or: capsules pause --hours 2
+```
+
+While paused, Claude's edits that Capsules would block go through, and each one is still noted in `capsules log`. Claude Code reminds you that Capsules is paused at the start and end of every task. It **turns itself back on after 24 hours** at most, and tells you when it does. To turn it back on sooner:
+
+```sh
+capsules resume
+```
+
+A pause only affects this computer's live checks. `capsules check` still checks everything.
+
+**You want to know how it's going.** `capsules stats` counts this week's blocks, warnings, notes, approvals and false alarms; `capsules stats --since 30d` covers a month.
+
+**Something looks broken** (an error message from Capsules, a check that never seems to run, Claude Code showing a "hook error"):
+
+```sh
+capsules report
+```
+
+Send Parth the file it names, after reading it. It includes any internal errors Capsules hit and whether its checks are still installed. If Claude Code shows a hook error after you upgraded, run `capsules init` again in that project.
+
+**You want it gone.** See step 9: `capsules remove --all` takes everything out.
 
 ## 9. Remove it (any time)
 
@@ -165,6 +213,6 @@ npm uninstall -g @pyscoparth/capsules
 - **No CI yet.** The GitHub check that runs on pull requests needs the public npm package, which isn't published yet. The live checks in Claude Code work fully.
 - **The shell check is best effort.** Capsules checks Claude's file edits exactly, but clever shell commands can get past it. In the public version, CI is the final gate.
 - **One person per machine.** The live checks are set up per computer: each teammate runs `capsules init` once.
-- If anything goes wrong, Capsules is designed never to block Claude because of its own bug; it shows an error and lets the edit through. Please tell Parth when that happens.
+- If anything goes wrong, Capsules is designed never to block Claude because of its own bug; it shows an error and lets the edit through. It notes the error for `capsules report`; please send Parth a report when that happens.
 
 Questions or problems: reply to Parth directly.

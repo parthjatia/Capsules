@@ -1,8 +1,9 @@
 // `capsules hook pre-edit` (C11): simulate an Edit/Write/MultiEdit/NotebookEdit, classify it
 // (C5.2), check permissions, and apply the one rule within the session (C6.2, D-024).
+import { LOG_FILE, PAUSE_FILE } from "../core/activity.js";
 import { isProposalPath, proposalCapsule } from "../core/proposal-path.js";
-import { existsSync, readFileSync } from "node:fs";
-import { isAbsolute, relative, resolve, sep } from "node:path";
+import { existsSync, lstatSync, readFileSync, readlinkSync, realpathSync } from "node:fs";
+import { basename, dirname, isAbsolute, join, relative, resolve, sep } from "node:path";
 import picomatch from "picomatch";
 import { agentMay, gentleRelaxes, settingsAction, type Action } from "../core/access.js";
 import { recordGentle } from "./session.js";
@@ -239,18 +240,32 @@ export async function preEdit(
   const before = existsSync(abs) ? readFileSync(abs, "utf8") : null;
   const after = simulate(tool, ti, before);
 
-  if (TOOL_FILES.has(path) || path.startsWith(".capsules/_cache/"))
-    return path.startsWith(".capsules/_cache/")
-      ? allow()
-      : block(
-          hookMsg.blocked(
-            "E027",
-            `${path} is written only by capsules' own commands.`,
-            [["file", path]],
-            hookMsg.toolFileWhy,
-            hookMsg.toolFileFix,
-          ),
-        );
+  // C19: _cache holds the pause switch, the log, the sessions' one-rule memory and the hook
+  // index. Only capsules writes there, never the Edit or Write tools. Judged by real path
+  // (a symlink into _cache counts) and without letter case where the disk ignores it.
+  const cached = inCache(root, abs, path);
+  if (cached)
+    return block(
+      hookMsg.blocked(
+        "E027",
+        cached === PAUSE_FILE || cached === LOG_FILE
+          ? `${cached} is capsules' pause switch or its log, which only a human's command writes.`
+          : `${cached} is in capsules' own cache, which only capsules writes.`,
+        [["file", path]],
+        hookMsg.humansOnlyWhy,
+        hookMsg.humansOnlyFix,
+      ),
+    );
+  if (TOOL_FILES.has(path))
+    return block(
+      hookMsg.blocked(
+        "E027",
+        `${path} is written only by capsules' own commands.`,
+        [["file", path]],
+        hookMsg.toolFileWhy,
+        hookMsg.toolFileFix,
+      ),
+    );
   if (
     isGeneratedPath(path) ||
     (path === "AGENTS.md" &&
@@ -472,4 +487,48 @@ export async function preEdit(
     ...(approvals.length ? [hookMsg.approval(approvals.join("; "))] : []),
   ];
   return notices.length ? allow(notices.join("\n")) : allow();
+}
+
+/** Windows and macOS disks ignore letter case, so `Pause.json` is `pause.json` there. */
+const fold = (p: string): string =>
+  process.platform === "win32" || process.platform === "darwin" ? p.toLowerCase() : p;
+
+/**
+ * The cache path an edit would really write, or null. Checks the path as given and, when it
+ * or its folder exists, the real path behind any symlink (C19).
+ */
+export function inCache(root: string, abs: string, path: string): string | null {
+  const CACHE = ".capsules/_cache";
+  const known = [PAUSE_FILE, LOG_FILE];
+  const hit = (p: string): string | null => {
+    const f = fold(p);
+    if (f !== fold(CACHE) && !f.startsWith(fold(CACHE) + "/")) return null;
+    return known.find((k) => fold(k) === f) ?? p;
+  };
+  const direct = hit(path);
+  if (direct) return direct;
+  try {
+    const realRoot = realpathSync.native(root);
+    let real: string;
+    // A symlink to a file that doesn't exist yet: follow the link to where it would write.
+    let target = abs;
+    for (let i = 0; i < 8 && !existsSync(target); i++) {
+      try {
+        if (!lstatSync(target).isSymbolicLink()) break;
+      } catch {
+        break;
+      }
+      target = resolve(dirname(target), readlinkSync(target));
+    }
+    if (target !== abs && !existsSync(target)) abs = target;
+    if (existsSync(abs)) real = realpathSync.native(abs);
+    else if (existsSync(dirname(abs)))
+      real = join(realpathSync.native(dirname(abs)), basename(abs));
+    else return null;
+    const rel = relative(realRoot, real).split(sep).join("/");
+    if (rel.startsWith("..") || isAbsolute(rel)) return null;
+    return hit(rel);
+  } catch {
+    return null;
+  }
 }

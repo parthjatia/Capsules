@@ -88,6 +88,7 @@ Git does the storing. Capsules adds a lockfile of fingerprints (`capsules.lock`)
 - **When blocked, the agent keeps going.** If it thinks a test or rule is wrong, it leaves a note (`capsules propose`) instead of changing it.
 - **`capsules review`** lists everything waiting for you: changed rules and tests in full, with before and after; examples that still describe an old rule; the agent's notes; then routine items one line each. `capsules review approve r1 r2` approves items; `--routine` never approves a rule, an example or a test. Run it in your own terminal (agents are refused) and commit `.capsules/approvals.lock`.
 - **Gentle mode** is the default for new installs: an agent working outside its area gets a warning instead of a block. Weakening tests, the one rule, rule changes and switching off the checks are blocked from day one. `capsules mode` lists what strict mode would have blocked; `capsules mode strict` switches.
+- **If something goes wrong:** `capsules log` lists every block, warning and note on your machine; `capsules log --false-alarm <n>` marks a wrong one; `capsules pause` lets edits through (still logged) for up to 24 hours, then turns itself back on; `capsules stats` counts the week; `capsules report` writes one file to share, and shows it to you first.
 - **Explain any file:** `capsules explain src/web/checkout.tsx` shows its area, concerns, the rules it must keep, who may edit it, and related decisions. `capsules context <area>` prints what an agent should read before working there.
 
 ## In CI

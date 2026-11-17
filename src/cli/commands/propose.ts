@@ -2,6 +2,7 @@
 // leave a proposal or a note for an owner, instead of changing a rule or a test, or stopping.
 import { existsSync, mkdirSync, writeFileSync } from "node:fs";
 import { join } from "node:path";
+import { appendLog } from "../../core/activity.js";
 import { parseAddress } from "../../core/address.js";
 import { membershipOf } from "../../core/membership.js";
 import { address } from "../../core/model.js";
@@ -67,11 +68,12 @@ export function propose(io: Io, target: string, opts: ProposeOptions, env = proc
   while (existsSync(join(dir, `${capsule}--${nodeSlug}--${n}.md`))) n++;
   const name = `${capsule}--${nodeSlug}--${n}`;
   const file = `${PROPOSALS_DIR}/${name}.md`;
+  const by = session?.agent ?? (env.CLAUDECODE ? "default" : "a human (no session)");
   const body = renderProposal({
     target: canonical,
     capsule,
     kind,
-    by: session?.agent ?? (env.CLAUDECODE ? "default" : "a human (no session)"),
+    by,
     session: session?.id ?? null,
     why: opts.why,
     text,
@@ -79,6 +81,18 @@ export function propose(io: Io, target: string, opts: ProposeOptions, env = proc
   if (!opts.dryRun) {
     mkdirSync(dir, { recursive: true });
     writeFileSync(join(dir, `${name}.md`), body);
+    // C19.2: the log names the proposal, never its reasons or text.
+    appendLog(
+      project.root,
+      {
+        kind: "proposal",
+        tool: "capsules propose",
+        file: canonical,
+        agent: by,
+        summary: `${kind === "note" ? "a note" : kind === "new" ? "a new item" : "a change"} proposed for ${canonical} (${file})`,
+      },
+      env,
+    );
   }
   if (opts.json)
     io.out(toJson("propose", { id: name, file, target: canonical, kind, dryRun: !!opts.dryRun }));

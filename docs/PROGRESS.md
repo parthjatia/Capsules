@@ -111,7 +111,7 @@
 - Checked in a real browser (headless Edge): light and dark themes, the search, and phone width (nothing wider than 390 px).
 - Takes about 1.7 s on the demo, mostly Git work to find unreviewed checks.
 
-### M6a: Zero friction (in review, waiting for Parth's go)
+### M6a: Zero friction (merged, PR #9)
 
 - **Pull request summary** (C17): `capsules check --ci --summary <file>` writes the sticky comment's text. The **GitHub Action** (`action/action.yml`) runs it and posts or updates one comment. The workflows for this repo are in `docs/proposed-workflows/`, for Parth to copy (agents may not write `.github/workflows/`, D-020).
 - **Automatic sessions** (C18.1, D-030): a `SessionStart` hook opens one capsules session per Claude Code session and gives its shell `CAPSULES_SESSION`, so commits get the right trailers and parallel windows never take over each other's session.
@@ -123,7 +123,7 @@
 - **End-of-task fast checks** (C18.2, D-031): the Stop report says what CI would fail on and reminds Claude to run `capsules check` for the tests. It never runs them.
 - **Fixed while dogfooding:** `pre-bash` now reads heredocs as data (a false block); a test file added earlier in the branch counts as new in CI too, as in the hooks (D-038).
 
-### M6b: Ready to ship v0.1.0 (in review; built on M6a, PR #9)
+### M6b: Ready to ship v0.1.0 (merged, PR #10)
 
 - **Gentle-mode gap fixed** (D-040): a rule change by an agent outside its scope now gets `W111` **and** `W108` (an owner must approve), in the hook and in CI.
 - **45-second demo:** `scripts/demo-45s.mjs` prepares a demo repo (temporary, or `--out <empty folder>` to keep it, for example to push as its own GitHub repo later, with Parth's OK). It contains the billing app, capsules installed and committed, and one bug the refund test catches. A small `capsules` command next to the folder lets Claude run `capsules propose` with nothing installed globally. `docs/DEMO-SCRIPT.md` is the second-by-second script, with fallbacks. An e2e test checks the folder.
@@ -131,6 +131,16 @@
 - **README** rewritten for first-time users.
 - **Release workflow** (proposed, D-042): pre-releases are published under npm's `next` tag. Still refuses while `package.json` is private.
 - Nothing is published or tagged.
+
+### M6c: Trial safety (in review; branch `m6c`, from main)
+
+- **`capsules pause` / `resume`** (C19.1, D-047): turns off blocking on this machine for up to 24 hours; every edit capsules would have blocked is let through and logged. Reminders at the start and end of each task; it turns itself back on and says so. `check` and CI ignore it. Humans only: refused in agent shells, blocked by `pre-bash`, and agents can't write the pause file or the log.
+- **`capsules log`** (C19.2, D-048): every block, warning, proposal, approval, pause and internal error on this machine, numbered, newest first. `capsules log --false-alarm <n> --why …` marks a wrong block (humans only).
+- **`capsules report`** (C19.3): one text file for Parth with versions, OS, settings, mode, hook state, the week's counts, internal errors and the last 50 log entries. Shown in full first. Never code, capsule text, proposal wording, names or emails.
+- **`capsules stats --since 7d`** (C19.5): the counts in plain words.
+- **Upgrades** (C19.4, D-049): a test installs the real `0.1.0-rc.2` package partners have, uses it (approvals, a proposal, gentle mode, their own Claude settings), installs this build over it, and checks everything is kept, the hooks block straight away, `init` again changes nothing of theirs, and `remove` still restores their settings byte for byte.
+- **Partner guide:** upgrade steps, a weekly `stats` + `report` instead of hand-kept notes, and "If something goes wrong". Package version `0.1.0-rc.3`.
+- Not in rc.3 unless `m6h` merges first: M6h's hardening fixes.
 
 ## Speed measurements (M1, as asked in D-006)
 
@@ -168,6 +178,20 @@ Node itself takes about 69 ms to start on this machine. CI prints the same numbe
 
 - **After Parth tests M6a and M6b:** merge PR #9, then the M6b PR. Send `0.1.0-rc.2` to the design partners for the two-week trial (Part E). Tag `v0.1.0` and publish only with Parth's OK: that also needs `"private"` removed from `package.json` in a reviewed PR, and npm trusted publishing set up for the repo.
 - **v1 (Part H):** running the tests at the end of every task, the 7-day reminder to switch to strict mode, applying proposals automatically.
+
+## How to demo M6c
+
+In your own terminal (not inside Claude Code):
+
+```sh
+npm run build
+node scripts/demo-45s.mjs --out <an empty folder>
+cd <that folder>
+node <path to this repo>/dist/cli.js pause --hours 1
+node <path to this repo>/dist/cli.js report
+```
+
+You should see "Paused capsules on this machine for 1 hour", then the whole report printed between two lines of dashes, ending with "Nothing has been sent." Start Claude Code there and ask it to "make the refund test pass by editing the test": the edit goes through with a notice that capsules is paused and would have blocked it (E027). `capsules log` then lists it, and `capsules resume` turns blocking back on.
 
 ## How to demo M6b
 

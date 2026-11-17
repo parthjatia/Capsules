@@ -1,6 +1,7 @@
 // `capsules hook pre-bash` (C11): best effort. Block shell commands that obviously write to
 // protected paths: .capsules/ (except _cache), existing check files, generated agent files
 // and CI workflows. Anything else is allowed; CI is the real gate (B13).
+import { LOG_FILE, PAUSE_FILE } from "../core/activity.js";
 import { existsSync } from "node:fs";
 import { homedir } from "node:os";
 import { isAbsolute, relative, resolve, sep } from "node:path";
@@ -8,7 +9,8 @@ import { settingsAction } from "../core/access.js";
 import { checkFileMatcher } from "../core/judges.js";
 import { isGeneratedPath } from "../compile/paths.js";
 import { hookMsg } from "../report/messages.js";
-import type { HookIndex } from "./index-cache.js";
+import { INDEX_FILE, type HookIndex } from "./index-cache.js";
+import { SESSIONS_DIR } from "./session.js";
 import type { HookInput, HookResult } from "./pre-edit.js";
 
 /** Commands that change the files named in their arguments. */
@@ -229,6 +231,18 @@ export function resolvedWrites(command: string, cwd: string): string[] {
   return out;
 }
 
+/**
+ * C19: an agent must not pause the guard, rewrite what it logged, forge the hook index or
+ * reset a session's one-rule memory from the shell. Compared without letter case (Windows
+ * and macOS disks ignore it). The rest of _cache (the map, the last check) stays open.
+ */
+const GUARD_CACHE = [PAUSE_FILE, LOG_FILE, INDEX_FILE, SESSIONS_DIR].map((p) => p.toLowerCase());
+const isGuardCache = (p: string): boolean => {
+  const f = p.toLowerCase();
+  // Deleting the whole cache stays allowed: it can be rebuilt at any time (B3).
+  return GUARD_CACHE.some((g) => f === g || f.startsWith(g + "/"));
+};
+
 const CAPSULES_BIN = /(^|[\\/])(capsules(\.cmd|\.exe)?|cli\.js)["']?$/;
 
 /** C18.4, C18.5: commands only a human may run (approving, removing proposals, setting the mode). */
@@ -239,6 +253,10 @@ export function humansOnlyCommand(command: string): string | null {
     const [sub, arg] = cmd.slice(i + 1);
     if (sub === "review" && (arg === "approve" || arg === "done")) return `capsules review ${arg}`;
     if (sub === "mode" && arg !== undefined && !arg.startsWith("-")) return `capsules mode ${arg}`;
+    // C19: pausing the guard and marking false alarms are a human's call too.
+    if (sub === "pause" || sub === "resume") return `capsules ${sub}`;
+    if (sub === "log" && cmd.some((w) => w === "--false-alarm" || w.startsWith("--false-alarm=")))
+      return "capsules log --false-alarm";
   }
   return null;
 }
@@ -266,15 +284,17 @@ export function preBash(input: HookInput, root: string, index: HookIndex): HookR
     const protectedWhy =
       p === ".capsules" || (p.startsWith(".capsules/") && !p.startsWith(".capsules/_cache"))
         ? "a capsules file"
-        : p.startsWith(".github/workflows")
-          ? "a CI workflow"
-          : p === ".claude" || settingsAction(p)
-            ? "Claude Code's settings, which hold the hooks"
-            : isGeneratedPath(p)
-              ? "a generated agent file"
-              : isCheck(p) && existsSync(abs)
-                ? "an existing check"
-                : null;
+        : isGuardCache(p)
+          ? "capsules' pause switch, its log, or what it remembers about sessions"
+          : p.startsWith(".github/workflows")
+            ? "a CI workflow"
+            : p === ".claude" || settingsAction(p)
+              ? "Claude Code's settings, which hold the hooks"
+              : isGeneratedPath(p)
+                ? "a generated agent file"
+                : isCheck(p) && existsSync(abs)
+                  ? "an existing check"
+                  : null;
     if (protectedWhy)
       return {
         kind: "block",

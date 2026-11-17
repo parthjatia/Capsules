@@ -1,5 +1,6 @@
 // Every user-facing diagnostic lives here (F2). Each one says: what is wrong, where,
 // why it matters, and the exact fix, in plain English.
+import { localTime } from "../core/activity.js";
 
 export type Severity = "error" | "warning";
 
@@ -575,9 +576,9 @@ export const hookMsg = {
   bashFix:
     "make the change with the Edit or Write tool so capsules can check it, or ask a human to make it.",
   humansOnlyWhy:
-    "approving a rule or a test, removing a proposal and switching the mode are an owner's decisions; an agent can't make them.",
+    "approving a rule or a test, removing a proposal, switching the mode, pausing capsules and marking a false alarm are a human's decisions; an agent can't make them.",
   humansOnlyFix:
-    "tell the user what you'd like approved; they run `capsules review` and approve it in their own terminal.",
+    "tell the user what you'd like approved or changed; they run the command in their own terminal.",
   gentle: (what: string) =>
     `capsules (gentle mode, W111): allowed, but strict mode would block this: ${what}. Run \`capsules mode\` to see the list.`,
   approval: (what: string) =>
@@ -714,4 +715,158 @@ export const mapMsg = {
       : "Open it in a browser (or run `capsules map --open`). It works offline and makes no network requests.\n"),
   dryRun: (path: string) =>
     `Dry run: would write the capsules map to ${path}. Nothing was changed.\n`,
+};
+
+/** Trial safety (C19): pause, resume, log, report, stats. */
+export interface Stats {
+  blocks: number;
+  blocksByCode: [string, number][];
+  paused: number;
+  warnings: number;
+  warningsByCode: [string, number][];
+  proposals: number;
+  approvals: number;
+  falseAlarms: number;
+  pauses: number;
+  errors: number;
+  topFiles: [string, number][];
+}
+
+const plural = (n: number, one: string, many = one + "s") => `${n} ${n === 1 ? one : many}`;
+const codes = (list: [string, number][]) =>
+  list.length ? ` (${list.map(([c, n]) => (n > 1 ? `${c} x${n}` : c)).join(", ")})` : "";
+const LOG_WORDS: Record<string, string> = {
+  block: "blocked",
+  paused: "paused, let through",
+  warning: "warning",
+  proposal: "proposal",
+  approval: "approved",
+  "false-alarm": "false alarm",
+  pause: "paused",
+  resume: "resumed",
+  error: "internal error",
+};
+
+export const trialMsg = {
+  humansOnly: (cmd: string) =>
+    `error  ${cmd} is for humans, and this looks like an agent's shell (CAPSULES_SESSION or CLAUDECODE is set).\n` +
+    "  why:  pausing the guard, or saying a block was wrong, is the user's decision; an agent can't make it.\n" +
+    "  fix:  run it in your own terminal, outside Claude Code.\n",
+  pausedReminder: (until: string) =>
+    `capsules is PAUSED on this machine until ${localTime(until)}: edits it would block are let through and logged. A human can turn it back on with \`capsules resume\`. CI still checks everything.`,
+  autoResumed: (until: string) =>
+    `capsules: the pause ended at ${localTime(until)}, so capsules is checking edits again (it resumes by itself after at most 24 hours).`,
+  pausedAllowed: (code: string, summary: string, until: string) =>
+    `capsules is paused, so this was let through. It would have been blocked (${code}): ${summary}\n` +
+    `Logged; see \`capsules log\`. The pause ends at ${localTime(until)}.`,
+  paused: (until: string, hours: number, was: boolean, dry: boolean) =>
+    `${dry ? "Would pause" : was ? "Paused again" : "Paused"} capsules on this machine for ${plural(hours, "hour")}, until ${localTime(until)}.\n` +
+    "While paused, Claude's edits that capsules would block are let through, and each one is logged (`capsules log`).\n" +
+    "Nothing else changes: capsules still shows warnings, and `capsules check` and CI check everything as usual.\n" +
+    `It turns itself back on at ${localTime(until)}. To turn it back on sooner: capsules resume\n`,
+  resumed: (was: boolean, dry: boolean) =>
+    was
+      ? `${dry ? "Would turn" : "Turned"} capsules back on: Claude's edits are checked and blocked again.\n`
+      : "capsules isn't paused. Nothing changed.\n",
+  badHours: (v: string) =>
+    `--hours must be a whole number from 1 to 24, not "${v}".\n  why:  a pause always ends within a day, so the guard can't be left off by mistake.`,
+  badLimit: (v: string) => `--limit must be a number above 0, not "${v}".`,
+  badSince: (v: string) =>
+    `--since must look like 7d (days) or 12h (hours), not "${v}".\n  fix:  capsules stats --since 7d`,
+  notMarkable: (v: string, exists: boolean) =>
+    exists
+      ? `entry ${v} isn't a block or a warning, so it can't be a false alarm.\n  fix:  run \`capsules log\` and use the number (#…) of a block or warning.`
+      : `there is no log entry ${v}.\n  fix:  run \`capsules log\` and use the number (#…) shown at the start of a line.`,
+  marked: (n: number, dry: boolean) =>
+    `${dry ? "Would mark" : "Marked"} #${n} as a false alarm. Thank you: \`capsules report\` and \`capsules stats\` include it.\n`,
+  logLine: (
+    e: {
+      n: number;
+      time: string;
+      kind: string;
+      code?: string;
+      tool?: string;
+      file?: string;
+      agent?: string;
+      summary: string;
+      why?: string;
+    },
+    marked: Set<number>,
+  ) =>
+    `#${e.n}  ${localTime(e.time)}  ${LOG_WORDS[e.kind] ?? e.kind}${e.code ? ` ${e.code}` : ""}` +
+    `${e.file ? `  ${e.file}` : ""}${e.agent && e.kind !== "approval" ? `  (${e.agent})` : ""}` +
+    `${marked.has(e.n) ? "  [marked a false alarm]" : ""}\n      ${e.summary}${e.why ? `\n      why: ${e.why}` : ""}`,
+  log: (
+    shown: {
+      n: number;
+      time: string;
+      kind: string;
+      code?: string;
+      file?: string;
+      agent?: string;
+      summary: string;
+      why?: string;
+    }[],
+    total: number,
+    marked: Set<number>,
+    pause: { paused: boolean; until?: string },
+  ) =>
+    (pause.paused && pause.until ? trialMsg.pausedReminder(pause.until) + "\n\n" : "") +
+    (total === 0
+      ? "Nothing logged on this machine yet. capsules logs every block, warning, proposal, approval and pause here.\n"
+      : `What capsules did on this machine, newest first (${shown.length} of ${total}${shown.length < total ? "; --all shows every entry" : ""}):\n\n` +
+        shown.map((e) => trialMsg.logLine(e, marked)).join("\n") +
+        '\n\nA block that shouldn\'t have happened? Run in your own terminal: capsules log --false-alarm <#> --why "<what was wrong>"\n'),
+  reportLine: (
+    e: {
+      n: number;
+      time: string;
+      kind: string;
+      code?: string;
+      tool?: string;
+      file?: string;
+      agent?: string;
+      summary: string;
+      why?: string;
+      version?: string;
+    },
+    marked: Set<number>,
+  ) =>
+    `#${e.n} ${e.time.slice(0, 16).replace("T", " ")} UTC  ${LOG_WORDS[e.kind] ?? e.kind}` +
+    `${e.code ? ` ${e.code}` : ""}${e.tool ? `  ${e.tool}` : ""}${e.file ? `  ${e.file}` : ""}` +
+    `${e.agent ? `  (${e.agent})` : ""}${e.version ? `  v${e.version}` : ""}${marked.has(e.n) ? "  [false alarm]" : ""}` +
+    `\n    ${e.summary}${e.why ? `\n    why: ${e.why}` : ""}`,
+  reportShown: (text: string, file: string, dry: boolean) =>
+    `${"-".repeat(72)}\n${text}${"-".repeat(72)}\n` +
+    (dry
+      ? "Dry run: this is the report; nothing was written.\n"
+      : `This is the whole report, saved as ${file}.\n`) +
+    "Nothing has been sent. Read it; if you're happy with it, send that file to Parth.\n",
+  stats: (label: string, s: Stats) => {
+    const rows: [number, string][] = [
+      [s.blocks, `${s.blocks === 1 ? "edit" : "edits"} blocked${codes(s.blocksByCode)}`],
+      [s.paused, `would have been blocked, but capsules was paused`],
+      [s.warnings, `${s.warnings === 1 ? "warning" : "warnings"}${codes(s.warningsByCode)}`],
+      [
+        s.proposals,
+        `${s.proposals === 1 ? "proposal or note" : "proposals or notes"} left for an owner`,
+      ],
+      [s.approvals, `${s.approvals === 1 ? "item" : "items"} approved by a human`],
+      [
+        s.falseAlarms,
+        `${s.falseAlarms === 1 ? "block or warning" : "blocks or warnings"} marked as a false alarm`,
+      ],
+      [s.pauses, `${s.pauses === 1 ? "pause" : "pauses"}`],
+      [s.errors, `internal ${s.errors === 1 ? "error" : "errors"} (bugs in capsules)`],
+    ];
+    const w = Math.max(...rows.map(([n]) => String(n).length));
+    return (
+      `In the last ${label} on this machine:\n` +
+      rows.map(([n, t]) => `  ${String(n).padStart(w)} ${t}`).join("\n") +
+      "\n" +
+      (s.topFiles.length
+        ? `Most blocked: ${s.topFiles.map(([f, n]) => `${f} (${n})`).join(", ")}\n`
+        : "")
+    );
+  },
 };

@@ -3,7 +3,7 @@ import { spawnSync } from "node:child_process";
 import { existsSync, readFileSync, writeFileSync } from "node:fs";
 import { join } from "node:path";
 import { afterAll, describe, expect, it } from "vitest";
-import { CLI, cleanup, demoRepo, gitIn } from "./helpers.js";
+import { CLI, cleanup, commit, demoHistory, demoRepo, gitIn } from "./helpers.js";
 
 afterAll(cleanup);
 
@@ -151,5 +151,137 @@ describe("when blocked, keep going (C18.7)", () => {
     expect(last).toMatch(/^ {2}next: {4}don't try another way around this block\. Carry on/);
     expect(last).toContain('capsules propose <address or test file> --why "<reason>"');
     expect(r.stderr).not.toContain("say so and stop");
+  });
+});
+
+const agentTrailers = (agent = "default", role = "builder") => [
+  "Capsule-Session: s1",
+  `Capsule-Agent: ${agent}`,
+  `Capsule-Role: ${role}`,
+  "Capsule-Scope: **",
+];
+const proposalsDir = (dir: string) => join(dir, ".capsules", "_proposals");
+const rmProposal = (dir: string) =>
+  gitIn(dir, "rm", "-q", ".capsules/_proposals/billing.invoices--C1--1.md");
+
+describe("capsules propose (C18.3)", () => {
+  it("leaves a note about a test file, and changes nothing else", () => {
+    const dir = demoHistory();
+    const r = cli(
+      dir,
+      {},
+      "propose",
+      "tests/invoices/refunds.test.js",
+      "--why",
+      "It expects the old limit.",
+    );
+    expect(r.status).toBe(0);
+    const id = "billing.invoices--tests-invoices-refunds.test.js--1";
+    expect(r.stdout).toContain(
+      `Wrote .capsules/_proposals/${id}.md (a note for tests/invoices/refunds.test.js)`,
+    );
+    expect(r.stdout).toContain("carry on with the rest of the task");
+    const text = readFileSync(join(proposalsDir(dir), `${id}.md`), "utf8");
+    expect(text).toContain('target: "tests/invoices/refunds.test.js"\nkind: note\n');
+    expect(text).toContain("## why\n\nIt expects the old limit.\n");
+    expect(text).not.toMatch(/20\d\d-\d\d-\d\d/); // no timestamps (F2)
+    expect(gitIn(dir, "status", "--porcelain")).toBe("?? .capsules/_proposals/\n");
+  });
+
+  it("proposes a change to a rule, or a new one with its text; numbers repeat proposals", () => {
+    const dir = demoHistory();
+    expect(
+      cli(dir, {}, "propose", "billing.invoices#C1", "--why", "a", "--text", "New text.").status,
+    ).toBe(0);
+    expect(cli(dir, {}, "propose", "billing.invoices#C1", "--why", "b").status).toBe(0);
+    const n = cli(
+      dir,
+      {},
+      "propose",
+      "billing.invoices#C9",
+      "--why",
+      "c",
+      "--text",
+      "Partial refunds.",
+    );
+    expect(n.stdout).toContain("a proposed new item for billing.invoices#C9");
+    const one = readFileSync(join(proposalsDir(dir), "billing.invoices--C1--1.md"), "utf8");
+    expect(one).toContain("kind: change");
+    expect(one).toContain("## suggested text\n\nNew text.\n");
+    expect(readFileSync(join(proposalsDir(dir), "billing.invoices--C1--2.md"), "utf8")).toContain(
+      "kind: note",
+    );
+  });
+
+  it("refuses without a reason, a new item without text, an unknown capsule, or a read-only judge", () => {
+    const dir = demoHistory();
+    expect(cli(dir, {}, "propose", "billing.invoices#C1").status).toBe(64);
+    expect(cli(dir, {}, "propose", "billing.invoices#C9", "--why", "x").stderr).toContain(
+      "needs the text",
+    );
+    expect(cli(dir, {}, "propose", "nope#C1", "--why", "x").stderr).toContain(
+      'There is no capsule "nope"',
+    );
+    expect(cli(dir, {}, "propose", "nope:billing#C1", "--why", "x").status).toBe(64);
+    const { id } = start(dir, "judge-window", { agent_type: "capsules-judge" });
+    const j = cli(dir, { CAPSULES_SESSION: id! }, "propose", "billing.invoices#C1", "--why", "x");
+    expect(j.status).toBe(64);
+    expect(j.stderr).toContain("read-only");
+  });
+
+  it("check and status report open proposals (W112), and the capsules still read cleanly", () => {
+    const dir = demoHistory();
+    cli(dir, {}, "propose", "billing.invoices#C1", "--why", "a");
+    const c = cli(dir, {}, "check", "--no-run", "--base", "main");
+    expect(c.stdout).toContain("warning W112  A note about billing.invoices#C1");
+    expect(c.stdout).toContain("capsules check: 0 errors");
+    expect(cli(dir, {}, "status").stdout).toContain(
+      "billing.invoices--C1--1: note for billing.invoices#C1",
+    );
+  });
+
+  it("an unreadable proposal is E034", () => {
+    const dir = demoHistory();
+    cli(dir, {}, "propose", "billing.invoices#C1", "--why", "a");
+    writeFileSync(join(proposalsDir(dir), "billing.invoices--C1--1.md"), "no front matter\n");
+    const c = cli(dir, {}, "check", "--no-run", "--base", "main");
+    expect(c.status).toBe(1);
+    expect(c.stdout).toContain("error E034");
+  });
+
+  it("hooks: an agent may add a proposal, but not change or remove an existing one", () => {
+    const dir = demoHistory();
+    cli(dir, {}, "propose", "billing.invoices#C1", "--why", "a");
+    const write = (file: string) =>
+      hook(dir, "pre-edit", {
+        hook_event_name: "PreToolUse",
+        session_id: "w",
+        tool_name: "Write",
+        tool_input: { file_path: join(proposalsDir(dir), file), content: "x" },
+      });
+    expect(write("billing.invoices--C1--9.md").status).toBe(0);
+    const r = write("billing.invoices--C1--1.md");
+    expect(r.status).toBe(2);
+    expect(r.stderr).toContain("(E027)");
+    expect(r.stderr).toContain("edit-proposals");
+  });
+
+  it("CI: an agent's commit may add a proposal; removing one needs an owner", () => {
+    const dir = demoHistory();
+    cli(dir, {}, "propose", "billing.invoices#C1", "--why", "a");
+    commit(dir, "propose", agentTrailers());
+    expect(cli(dir, {}, "check", "--no-run", "--base", "main").stdout).not.toContain("E027");
+    gitIn(dir, "checkout", "-q", "main");
+    gitIn(dir, "merge", "-q", "work");
+    gitIn(dir, "checkout", "-q", "-b", "more");
+    rmProposal(dir);
+    commit(dir, "agent removes it", agentTrailers());
+    const agent = cli(dir, {}, "check", "--no-run", "--base", "main");
+    expect(agent.status).toBe(1);
+    expect(agent.stdout).toMatch(/E027[\s\S]*edit-proposals/);
+    gitIn(dir, "reset", "-q", "--hard", "main");
+    rmProposal(dir);
+    commit(dir, "owner removes it"); // no trailers: Parth, who owns everything
+    expect(cli(dir, {}, "check", "--no-run", "--base", "main").stdout).not.toContain("E027");
   });
 });

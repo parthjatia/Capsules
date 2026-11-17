@@ -11,6 +11,7 @@ import { toJson } from "../../report/json.js";
 import { countBySeverity, plural, rows } from "../../report/text.js";
 import { EXIT } from "../exit-codes.js";
 import type { Io } from "../io.js";
+import { loadProposals } from "../../core/proposals.js";
 
 // Capsule and file counts, the lockfile, stale links and prompts, orphans, assumptions
 // past review, problem totals. Check results join in M3.
@@ -20,6 +21,7 @@ export function status(io: Io, opts: { json?: boolean }): number {
   const orphans = files.filter((f) => !f.home && !f.conflict.length).map((f) => f.file);
   const conflicts = files.filter((f) => f.conflict.length).map((f) => f.file);
   const overdue = project.diagnostics.filter((d) => d.code === "W105");
+  const { proposals } = loadProposals(project.root);
   const areas = project.capsules.filter((c) => c.kind === "area").length;
   const concerns = project.capsules.length - areas;
   const { errors, warnings } = countBySeverity(project.diagnostics);
@@ -75,6 +77,12 @@ export function status(io: Io, opts: { json?: boolean }): number {
           file: d.file,
           line: d.line,
           message: d.message,
+        })),
+        proposals: proposals.map((p) => ({
+          id: p.id,
+          target: p.target,
+          kind: p.kind,
+          by: p.by,
         })),
         problems: { errors, warnings },
       }),
@@ -142,6 +150,10 @@ export function status(io: Io, opts: { json?: boolean }): number {
       `assumptions past review (W105):\n${overdue.map((d) => `  ${d.message} (${d.file}:${d.line})`).join("\n")}`,
     );
   }
+  if (proposals.length)
+    parts.push(
+      `proposals waiting for an owner (W112), see \`capsules review\`:\n${proposals.map((p) => `  ${p.id}: ${p.kind} for ${p.target}, from ${p.by}`).join("\n")}`,
+    );
   io.out(parts.join("\n\n") + "\n");
   return EXIT.ok;
 }

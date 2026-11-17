@@ -10,6 +10,7 @@ import { writeFileSync } from "node:fs";
 import { resolve } from "node:path";
 import { toJson } from "../../report/json.js";
 import { prSummary } from "../../report/summary.js";
+import { proposalDiagnostics } from "../../core/proposals.js";
 import { countBySeverity, formatDiagnostics, plural, rows } from "../../report/text.js";
 import { EXIT } from "../exit-codes.js";
 import type { Io } from "../io.js";
@@ -46,6 +47,7 @@ export async function check(io: Io, opts: CheckOptions): Promise<number> {
     ...compileDiagnostics(project),
     ...g.diagnostics,
     ...runDiagnostics,
+    ...proposalDiagnostics(project.root),
   ]);
   const { errors, warnings } = countBySeverity(diagnostics);
   const ok = errors === 0;

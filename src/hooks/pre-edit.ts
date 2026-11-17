@@ -1,5 +1,6 @@
 // `capsules hook pre-edit` (C11): simulate an Edit/Write/MultiEdit/NotebookEdit, classify it
 // (C5.2), check permissions, and apply the one rule within the session (C6.2, D-024).
+import { isProposalPath, proposalCapsule } from "../core/proposal-path.js";
 import { existsSync, readFileSync } from "node:fs";
 import { isAbsolute, relative, resolve, sep } from "node:path";
 import picomatch from "picomatch";
@@ -274,6 +275,17 @@ export async function preEdit(
       capsule: "root",
       concerns: [],
       actions: [{ action, detail: path }],
+      checks: [],
+      intents: [],
+      rules: [],
+    };
+  } else if (isProposalPath(path)) {
+    // C18.3: anyone (but a read-only role) may leave a new proposal; changing or removing an
+    // existing one is for owners.
+    facts = {
+      capsule: proposalCapsule(path),
+      concerns: [],
+      actions: [{ action: before === null ? "add-proposals" : "edit-proposals", detail: path }],
       checks: [],
       intents: [],
       rules: [],

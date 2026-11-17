@@ -546,6 +546,33 @@ export const hookMsg = {
 };
 
 /** `capsules map` (C14). */
+/** `capsules propose` and proposal files (C18.3). */
+export const proposalMsg = {
+  needsWhy: () =>
+    'capsules propose needs a reason.\n  fix: add --why "<what looks wrong and why>", e.g. capsules propose tests/invoices/refunds.test.js --why "it expects the old refund limit".',
+  readOnlyRole: (agent: string, role: string) =>
+    `${agent} (role ${role}) is read-only, so it can't leave proposals.\n  fix: report what you found in your answer instead.`,
+  unknownCapsule: (id: string) =>
+    `There is no capsule "${id}".\n  fix: run \`capsules status\` to see the capsules, or name a file instead.`,
+  newNeedsText: (addr: string) =>
+    `${addr} doesn't exist yet, so a proposal for it needs the text.\n  fix: add --text "<the new rule, intent or example>".`,
+  unknownTarget: (t: string) =>
+    `"${t}" is neither an address (capsule#node) nor a file in this project.\n  fix: name a rule like billing#C1, or a test file like tests/invoices/refunds.test.js.`,
+  wrote: (file: string, target: string, kind: string, dry: boolean) =>
+    `${dry ? "Would write" : "Wrote"} ${file} (${kind === "note" ? "a note" : kind === "new" ? "a proposed new item" : "a proposed change"} for ${target}).\n` +
+    "Nothing else changed. An owner sees it in `capsules review`; carry on with the rest of the task.\n",
+  unreadable: (file: string, why: string) => `The proposal ${file} can't be read: ${why}.`,
+  unreadableWhy: "a proposal no one can read can't be reviewed.",
+  unreadableFix:
+    "fix the file (front matter with target and kind, then a `## why` section), or remove it with `capsules review done <proposal>`.",
+  waiting: (target: string, kind: string, by: string) =>
+    `${kind === "note" ? "A note" : "A proposal"} about ${target} from ${by} is waiting for an owner.`,
+  waitingWhy:
+    "an agent thinks a rule, an intent or a test should change, and only an owner can decide.",
+  waitingFix: (id: string) =>
+    `run \`capsules review\` to read it. Apply it or not, then remove it with \`capsules review done ${id}\`.`,
+};
+
 export const mapMsg = {
   wrote: (path: string, summary: string, opening: boolean) =>
     `Wrote the capsules map: ${path}\n  ${summary}\n` +

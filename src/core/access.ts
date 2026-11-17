@@ -15,6 +15,10 @@ export const ACTIONS = [
   "propose-examples",
   "edit-permissions",
   "edit-config",
+  // C18.3: a new proposal is allowed for every role but a read-only one; changing or
+  // deleting an existing proposal is humans only, unless explicitly granted.
+  "add-proposals",
+  "edit-proposals",
 ] as const;
 export type Action = (typeof ACTIONS)[number];
 
@@ -72,6 +76,10 @@ export function agentMay(
   if (!spec)
     return { allowed: false, reason: `${name} is not listed under agents in permissions.yaml` };
   const may = perms.roles[spec.role]?.may ?? [];
+  if (action === "add-proposals")
+    return may.some((a) => a !== "read")
+      ? { allowed: true, needsApproval: false }
+      : { allowed: false, reason: `the ${spec.role} role of ${name} is read-only` };
   let effective: Action = action;
   if (action === "change-checks" && !may.includes(action) && may.includes("propose-checks"))
     effective = "propose-checks";

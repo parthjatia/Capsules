@@ -20,6 +20,7 @@ import { parseCapsuleFile } from "./parse.js";
 import type { Action } from "./permissions.js";
 import { capsuleFromPath, checkFileMatcher as matcherFor } from "./judges.js";
 import { settingsAction } from "./access.js";
+import { isProposalPath, proposalCapsule } from "./proposal-path.js";
 import type { Project } from "./project.js";
 
 export interface UnitFile {
@@ -170,7 +171,7 @@ export interface NodeChange {
 export interface Classified {
   path: string;
   status: ChangeStatus;
-  kind: "code" | "check-file" | "capsule" | "settings" | "tool" | "ignored";
+  kind: "code" | "check-file" | "capsule" | "settings" | "tool" | "proposal" | "ignored";
   /** The capsule the change belongs to: the file's home (root for orphans), or the capsule edited. */
   capsule: string;
   concerns: string[];
@@ -262,6 +263,11 @@ export function classify(
   const action = settingsAction(f.path);
   if (action) {
     return { ...base, kind: "settings", capsule: "root", actions: [{ action, detail: f.path }] };
+  }
+  if (isProposalPath(f.path)) {
+    const capsule = proposalCapsule(f.path);
+    const action: Action = f.status === "A" ? "add-proposals" : "edit-proposals";
+    return { ...base, kind: "proposal", capsule, actions: [{ action, detail: f.path }] };
   }
   const cap = capsuleFromPath(f.path);
   if (cap) {

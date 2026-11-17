@@ -6,6 +6,7 @@ import { runHook } from "../hooks/main.js";
 import { check, type CheckOptions } from "./commands/check.js";
 import { codeowners } from "./commands/codeowners.js";
 import { map, type MapOptions } from "./commands/map.js";
+import { propose, type ProposeOptions } from "./commands/propose.js";
 import { compile } from "./commands/compile.js";
 import { context, type ContextOptions } from "./commands/context.js";
 import { doctorCmd, init, remove } from "./commands/install.js";
@@ -182,6 +183,17 @@ export function buildProgram(io: Io, setExit: (code: number) => void): Command {
     .action((commit: string | undefined, opts: { json?: boolean }) =>
       setExit(verdictShow(io, commit, opts)),
     );
+
+  program
+    .command("propose <target>")
+    .description(
+      "leave a proposal or a note for an owner about a rule (capsule#node) or a test file, instead of changing it",
+    )
+    .option("--why <reason>", "what looks wrong, and why (required)")
+    .option("--text <text>", "the suggested new text, if you have one")
+    .option("--dry-run", "say what would be written, without writing it")
+    .option("--json", "print JSON instead of text")
+    .action((target: string, opts: ProposeOptions) => setExit(propose(io, target, opts)));
 
   program
     .command("map")

@@ -13,6 +13,8 @@ repo/
 │   ├── config.yaml                   # settings (C4)
 │   ├── permissions.yaml              # owners, roles, agents, scopes (C5)
 │   ├── capsules.lock                 # pinned hashes (C7); written by the tool, committed
+│   ├── approvals.lock                # what an owner approved (C18.4); written by the tool, committed
+│   ├── _proposals/                   # agents' proposed changes and notes (C18.3), committed
 │   ├── installed.json                # every file capsules created or changed (for remove)
 │   ├── .gitignore                    # ignores _cache/ inside .capsules only
 │   ├── root.md                       # root capsule: the whole product
@@ -190,6 +192,10 @@ Errors (`E`) fail `capsules check`. Warnings (`W`) are reported only.
 | W108 | Change needs owner approval; GitHub enforces it through CODEOWNERS (D-016) |
 | W109 | A `prompt` node's `file` does not exist |
 | W110 | Stale prompt: the prompt file changed since it was locked (C7.4) |
+| E033 | `approvals.lock` was changed by someone who doesn't own every capsule it approves for (C18.4) |
+| E034 | `approvals.lock` or a proposal file can't be read (C18.3, C18.4) |
+| W111 | Gentle mode: this would be blocked in strict mode (agent scope or a `blocked-by` concern; C18.5) |
+| W112 | A proposal is waiting for an owner (C18.3); see `capsules review` |
 
 Every message says what's wrong, where (file:line), why it matters, and the exact fix, in plain English.
 
@@ -245,6 +251,7 @@ checks:
   timeout-seconds: 300
 one-rule:
   new-checks-with-code: allow      # allow | block
+mode: strict                       # strict | gentle (new installs start gentle, C18.5)
 weakened-tests: warn               # off | warn | block
 stale-links: warn                  # warn | block
 ci:
@@ -297,9 +304,10 @@ agents:                            # names match Claude Code sub-agent names whe
 | `edit-context` | `context` nodes |
 | `add-decisions` | New `decision` and `assumption` nodes. Existing decisions are immutable for everyone |
 | `propose-intent`, `propose-contracts`, `propose-examples` | Change those nodes. CI then requires owner approval (warning in solo mode) |
+| (anyone but `judge`) | **New** files in `.capsules/_proposals/` (C18.3). Changing or deleting an existing proposal is owners only |
 | `edit-permissions`, `edit-config` | Humans only. `edit-config` covers `.capsules/config.yaml`, CI workflows (`.github/workflows/**`) and Claude Code's project settings (`.claude/settings.json`, `.claude/settings.local.json`), so an agent can't switch the guard off (D-020, D-026) |
 | (none) | Generated agent files: only `capsules compile` writes them |
-| (none) | Tool-written files `capsules.lock` and `installed.json`: only the tool's own commands write them (`lock`, `refresh`, `relock`, `init`, `remove`). Hooks block direct edits. `refresh` of links **from** an intent, contract or example needs the same approval as editing that node (`propose-*`); `relock --cosmetic` is owners only |
+| (none) | Tool-written files `capsules.lock`, `approvals.lock` and `installed.json`: only the tool's own commands write them (`lock`, `refresh`, `relock`, `init`, `remove`, `review approve`). Hooks block direct edits. `refresh` of links **from** an intent, contract or example needs the same approval as editing that node (`propose-*`); `relock --cosmetic` is owners only |
 
 Owners may do everything in capsules they own. Humans who aren't owners act as `default`.
 
@@ -342,7 +350,7 @@ A **change unit** is one commit. In CI, it is also all commits in the pull reque
 For each capsule `X` in a change unit:
 
 - **V1, code and its judge.** The unit touches implementation files whose home is `X`, or which a concern `K` covers. It also **modifies or deletes an existing check** that judges `X`: a check node in `X` or in `K`, a check linked by `checked-by` from `X`'s contracts, or an existing check file covered by `X`.
-  - Adding new checks is not a violation (`one-rule.new-checks-with-code: allow`), but new checks are marked "unreviewed" until a human or a separate session confirms them.
+  - Adding new checks is not a violation (`one-rule.new-checks-with-code: allow`), but new checks are marked "unreviewed" until a human or a separate session confirms them. Starter checks written by a `drafter` session are unreviewed too (C18.6). An owner's approval in `approvals.lock` (C18.4) clears the mark.
 - **V2, rule and its reason.** The unit changes a contract or example in `X` and also changes an intent that contract `serves`.
 - V1 is reported as `E028` and V2 as `E029`.
 - **Solo mode never relaxes V1 or V2.**
@@ -430,6 +438,7 @@ The last field of a `link` record is the hash of the target **at the moment the 
 
 - **Claude Code sub-agents.** Hook input includes `agent_type` when a hook fires inside a sub-agent, or when the session was started with `claude --agent <name>` ([hooks docs, common input fields](https://code.claude.com/docs/en/hooks)). If it matches a key in `permissions.agents`, that's the actor (D-024).
 - **Main session:** `capsules work <capsule-pattern> [--agent <name>]` writes `.capsules/_cache/sessions/<id>.json` with `{id, agent, role, capsules, started}` and makes it the current session. `capsules work --end` closes it. The environment variable `CAPSULES_SESSION=<id>` selects a session when several run in parallel.
+- **Automatic sessions (C18.1):** a `SessionStart` hook opens one session per Claude Code session, so `capsules work` is only needed to narrow the scope.
 - **No session:** the actor is `default`.
 - **The one rule in hooks (D-024).** Within one Claude Code session (`session_id`), or one `capsules work` session when there is one, the hooks remember which code, checks, intents and contracts were changed, and block the edit that would break V1 or V2. Sub-agents share their parent's `session_id`, so a `test-maintainer` sub-agent can't change a test in the same session that changed the code.
 - **Commit trailers**, added by the optional `commit-msg` Git hook from the current session, or by the agent following the installed commands:
@@ -500,7 +509,8 @@ Installed by merging into `.claude/settings.local.json` (D-026): Claude Code's p
 | --- | --- | --- |
 | `PreToolUse`, `Edit\|Write\|MultiEdit\|NotebookEdit` | `capsules hook pre-edit` | Simulate the edit, classify it (C5.2), check permissions and the one rule for the current session. Block with a clear reason if not allowed |
 | `PreToolUse`, `Bash` | `capsules hook pre-bash` | Best effort: block obvious writes to protected paths (`rm`, `sed -i`, `>`, `mv` into `.capsules/`, check files, generated files). Otherwise allow |
-| `Stop` | `capsules hook stop` | Report only: validation errors, stale links, orphans, and the suggested next command, shown to the user as a JSON `systemMessage`. Always exit 0 in v0.1, and never `decision: block` |
+| `SessionStart` | `capsules hook session-start` | Opens this Claude Code session's capsules session (C18.1). Never blocks |
+| `Stop` | `capsules hook stop` | Report only: validation errors, stale links, orphans, what CI's fast checks would fail on (one rule, permissions, decisions; C18.2), open proposals, and the suggested next command, shown to the user as a JSON `systemMessage`. Always exit 0 in v0.1, and never `decision: block` |
 
 Hook protocol facts (verify against [Claude Code hooks docs](https://code.claude.com/docs/en/hooks) before building):
 
@@ -515,7 +525,7 @@ Installed under `.claude/` (verify the current Claude Code formats for commands,
 
 | File | Purpose |
 | --- | --- |
-| `.claude/commands/capsules-draft.md` → `/capsules-draft [area]` | The agent reads code, Git history, the README and existing CLAUDE.md, AGENTS.md or OpenSpec files. It proposes a capsule tree and concerns, writes `.capsules/*.md` as the `capsules-drafter` agent, runs `capsules check --no-run`, and then shows the human the **intents and examples in plain language** for approval. It never invents checks; checks must point to real commands |
+| `.claude/commands/capsules-draft.md` → `/capsules-draft [area]` | The agent reads code, Git history, the README and existing CLAUDE.md, AGENTS.md or OpenSpec files. It proposes a capsule tree and concerns, writes `.capsules/*.md` as the `capsules-drafter` agent, runs `capsules check --no-run`, and then shows the human the **intents and examples in plain language** for approval. It never invents checks; checks must point to real commands. When the app has few or no tests, it may write a few starter checks, only for examples the human approved, only as new test files (C18.6) |
 | `.claude/commands/capsules-work.md` → `/capsules-work <capsule>` | Runs `capsules work`, reads `capsules context <capsule>`, and follows it |
 | `.claude/commands/capsules-judge.md` → `/capsules-judge [base]` | Runs `capsules context --for judge --base <ref>` and hands the output to the `capsules-judge` sub-agent. It receives a verdict per contract and runs `capsules verdict record` |
 | `.claude/commands/capsules-map.md` → `/capsules-map` | Runs `capsules map` and explains it in plain words |
@@ -566,19 +576,22 @@ Exit codes: `0` OK · `1` problems found (errors, failing checks, violations) ·
 | Command | What it does |
 | --- | --- |
 | `capsules init [--agents …] [--yes] [--git-hooks] [--workflow]` | Shows a plan of every file it will create or change, asks to confirm, then creates `.capsules/` (keeping one that exists), compiles agent files, merges hooks into `.claude/settings.local.json` (C11), and installs commands, sub-agents and the skill. Optionally adds the commit-msg hook and `.github/workflows/capsules.yml`. Writes `installed.json` |
-| `capsules check [--base <ref>] [--all] [--no-run] [--ci] [--json]` | Validate → lock up to date → compiled files up to date → permissions and the one rule on the diff → append-only decisions → weakened-test signals → run checks for affected capsules |
+| `capsules check [--base <ref>] [--all] [--no-run] [--ci] [--summary <file>] [--json]` | Validate → lock up to date → compiled files up to date → permissions and the one rule on the diff → append-only decisions → weakened-test signals → run checks for affected capsules |
 | `capsules status` | Stale links, stale prompts, orphans, unreviewed checks, assumptions past review, last check results |
 | `capsules explain <file>` | Home, parents, concerns, rules, checks, who may edit, related decisions |
 | `capsules context <capsule\|file> [--budget <tokens>] [--for judge\|builder]` | Prints the context pack (C16). Tokens are estimated as characters ÷ 4 |
 | `capsules impact <address>` | Everything that depends on a node |
 | `capsules why <address>` | Decisions behind a node, with rejected options |
 | `capsules lock` · `refresh <address>` · `relock --cosmetic <address>` | Lockfile (C7.3) |
-| `capsules work <pattern> [--agent <name>]` · `work --end` | Sessions (C8) |
+| `capsules work <pattern> [--agent <name>]` · `work --end` | Sessions (C8, C18.1) |
+| `capsules propose <address\|check-file> --why <reason> [--text <new text>]` | Leave a proposal or a note for an owner (C18.3) |
+| `capsules review [--base <ref>]` · `review approve <id…>` · `review approve --routine` · `review done <proposal>` | Everything waiting for a human (C18.4). Approving is humans only |
+| `capsules mode [strict\|gentle]` | Show or set `mode` (C18.5). Humans only |
 | `capsules compile [--check]` | Agent files (C10) |
 | `capsules hook <pre-edit\|pre-bash\|stop>` | Called by agent hooks only |
 | `capsules verdict record --file <f>` · `verdict show [commit]` | Verdicts (C13) |
 | `capsules map [--format html\|mermaid\|json] [--out <f>] [--open]` | The map (C14) |
-| `capsules codeowners` | Prints suggested CODEOWNERS lines for `.capsules/**` and check files |
+| `capsules codeowners` | Prints suggested CODEOWNERS lines for `.capsules/**` (including `approvals.lock`) and check files |
 | `capsules doctor` | Proves we don't affect the app: lists every file we touched (from `installed.json`), confirms none is in `build.outputs` or app code, confirms `package.json` is unchanged by us, then runs `build.command` and `build.test` and reports the results |
 | `capsules remove [--yes]` | Removes everything in `installed.json`, un-merges our hook entries, and removes the AGENTS.md block. Leaves `.capsules/` unless `--all` |
 
@@ -612,3 +625,56 @@ Warnings:   1 skipped test added in tests/invoices/refunds.test.ts
 ```
 
 It is posted as one sticky comment and updated on each push. It is computed only from the diff and the check results, with no AI involved.
+
+## C18. Zero friction (M6a, D-030 to D-036)
+
+### C18.1 Automatic sessions (D-030)
+
+- `capsules init` also adds a `SessionStart` hook: `capsules hook session-start`. Claude Code runs it when a session starts, resumes, is cleared or compacted; it gets `session_id`, `source`, and `agent_type` when Claude Code was started with `claude --agent <name>` ([hooks docs, SessionStart](https://code.claude.com/docs/en/hooks)). It can't block.
+- It opens (or, on resume, reopens) a work session whose id is derived from the Claude Code `session_id`: `cc-` plus the first 16 hex characters of its SHA-256. The agent is `agent_type` if `permissions.agents` lists it, otherwise `default`; the scope is that agent's `capsules`.
+- It writes `export CAPSULES_SESSION=<id>` to `CLAUDE_ENV_FILE`, so every shell command Claude runs later in that session, including `git commit` and the commit-msg hook, uses this session's trailers ([hooks docs](https://code.claude.com/docs/en/hooks)). It does **not** become the repo's "current" session, so parallel Claude Code windows never take over each other's session.
+- The edit hooks find the session from `session_id`, so the one rule is tracked per Claude Code session exactly as before (D-024).
+- `capsules work <pattern> [--agent <name>]` run inside such a session narrows that same session (same id, same tracking) instead of starting a new one.
+- Its stdout tells Claude, in two lines, which session and role it has and to run `capsules explain <file>` before changing a file.
+
+### C18.2 End-of-task fast checks (D-031)
+
+The `Stop` report also runs, against the base (C6.4), the parts of `capsules check` that need no tests: validation, lock, compiled files, permissions and the one rule, append-only decisions, weakened-test signals. It reports anything CI would fail on, and says `run capsules check to run your tests` when the working tree has uncommitted code changes. It never runs check commands. Running the tests at the end of a task is v1 (Part H).
+
+### C18.3 Proposals (D-032)
+
+- `capsules propose <address|check-file> --why <reason> [--text <new text>]` writes one new file to `.capsules/_proposals/`. Agents use it to propose a change to an intent, contract, example or check, or to leave a note that a test looks wrong, instead of editing it or stopping.
+- File name: `<capsule>--<node-or-file-slug>--<n>.md`, with the next free `<n>`. Content: front matter `{target, kind: change|new|note, by, session}`, then `## why` and, with `--text`, `## suggested text`. No timestamps.
+- Any role but `judge` may create a proposal. Changing or deleting an existing proposal is owners only (E027). Proposals never change a rule: an owner, or the drafter on an owner's instruction, applies the text, then runs `capsules review done <proposal>` to remove the file. Applying a proposal automatically is v1 (Part H).
+- `capsules check` and `status` report each open proposal as `W112`.
+
+### C18.4 `capsules review` and `approvals.lock` (D-033)
+
+- `capsules review` lists everything waiting for a human, in plain words, versus the base (C6.4) plus uncommitted changes:
+  1. **In full, first (risky):** changed or new intents, contracts and examples (old and new text), changed or deleted existing checks (the diff), new checks still unreviewed (the check and its file), and open proposals (the reason and suggested text).
+  2. **One line each, last (routine):** stale links, stale prompts, assumptions past review, orphans, new decisions and context.
+- Each item has a short id (`r1`, `r2`, …). `capsules review approve <id…>` approves those items; `capsules review approve --routine` approves only the routine items and never a rule, intent, example or check. Approving a stale link re-pins that one link. Approving a risky item records it in `approvals.lock`.
+- `.capsules/approvals.lock` is tool-written, line-based, sorted, LF:
+  ```text
+  # approvals.lock v1. Written by `capsules review approve`. Do not edit by hand.
+  node billing.invoices#C4 a91f2c81d0b4
+  file billing.invoices#refunds tests/invoices/refunds.test.js 8d3f0e1a9b27c4d6e5f8a0b1c2d3e4f5a6b7c8d9
+  ```
+  An approval holds only while the node's hash (or the file's blob hash) is the one approved. An approved item no longer appears in `review`, is no longer "unreviewed", and gets no `W108`.
+- **Humans only.** `review approve`, `review done` and `mode` refuse to run when `CAPSULES_SESSION` or `CLAUDECODE` is set (inside an agent's shell); `pre-bash` blocks them too; direct edits to `approvals.lock` are blocked like `capsules.lock`. In CI, each commit that changes `approvals.lock` must be made by an owner of every capsule whose records it adds or changes (C5.3, as for `Capsule-Cosmetic`), or it is `E033`. An agent with a shell can get around the local refusals; CI and CODEOWNERS are the gate (B13).
+
+### C18.5 Gentle mode (D-034)
+
+- `mode: gentle` turns only these `E027`s into `W111` warnings, in the hooks and in CI: an edit outside the agent's `capsules` scope, and an edit to a file covered by one of its `blocked-by` concerns.
+- Everything else stays blocked in every mode: changing or deleting existing checks, the one rule (V1, V2), append-only decisions, edits to the guard (`edit-config`, `edit-permissions`, tool-written and generated files), changes to intents, contracts and examples without `propose-*`, and unknown agents.
+- `init` writes `mode: gentle` into a **new** `config.yaml`; a missing `mode` means `strict`, so existing installs don't change.
+- Hooks record each `W111` in `.capsules/_cache/gentle-log.jsonl` (this machine only). `capsules mode` prints the mode and that list ("what strict mode would have blocked"); `capsules mode strict` sets `mode: strict` in `config.yaml`, keeping its comments. Humans only (C18.4).
+- The reminder after 7 days (counted from the Git date of the commit that added `.capsules/config.yaml`) is v1 (Part H).
+
+### C18.6 Starter checks (D-035)
+
+When the app has few or no tests, `/capsules-draft` may write a few starter checks: only for examples the human approved, only as **new** test files using the app's existing test runner (or Node's built-in `node --test` for JavaScript with none), each with a `check` node whose `run:` is a real command. Check files added by a session whose role is `drafter` are "unreviewed" until an owner approves them (C18.4).
+
+### C18.7 When blocked, keep going (D-036)
+
+Every hook block message ends with what to do next: don't try another way around the block; carry on with the rest of the task; if a test or rule looks wrong, run `capsules propose <it> --why "<reason>"`. The compiled agent files, the skill and the commands say the same.

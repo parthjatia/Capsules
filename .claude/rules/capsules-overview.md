@@ -12,6 +12,8 @@ This project keeps a record of what each part is meant to do in `.capsules/`. Ea
 
 - Run `capsules explain <file>` to see its capsule, the rules it must keep and who may edit it.
 - Never weaken or delete an existing test to make it pass; fix the code. Never change code and an existing check that judges it in the same session.
+- Don't change an intent, rule, example or existing test to finish a task. If one looks wrong, run `capsules propose <address or test file> --why "<reason>"` and carry on.
+- If a capsules hook blocks an edit, don't try another way around it: carry on with the rest of the task.
 - Never edit an existing decision; add a new one that supersedes it.
 - Don't edit `.capsules/config.yaml`, `.capsules/permissions.yaml`, `.capsules/capsules.lock` or generated `capsules-*` rule files. After changing a capsule, run `capsules lock` and `capsules compile`.
 - Before finishing, run `capsules check --no-run`.

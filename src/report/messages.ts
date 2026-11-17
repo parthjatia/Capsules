@@ -489,6 +489,9 @@ export const compileMsg = {
 };
 
 /** Messages the hooks print (C11). Claude reads a block reason as the reason it can't proceed. */
+const KEEP_GOING =
+  'don\'t try another way around this block. Carry on with the rest of the task. If a test or rule looks wrong, leave a note for an owner: capsules propose <address or test file> --why "<reason>".';
+
 export const hookMsg = {
   blocked: (code: string, what: string, lines: [string, string][], why: string, fix: string) =>
     [
@@ -496,18 +499,26 @@ export const hookMsg = {
       ...lines.map(([k, v]) => `  ${(k + ":").padEnd(9)}${v}`),
       `  why:     ${why}`,
       `  fix:     ${fix}`,
+      `  next:    ${KEEP_GOING}`,
     ].join("\n") + "\n",
+  /** C18.7 (D-036): every block ends with how to carry on. */
+  keepGoing: KEEP_GOING,
+  sessionStarted: (id: string, agent: string, role: string, scope: string[], reopened: boolean) =>
+    `capsules: ${reopened ? "continuing" : "opened"} session ${id} for this Claude Code session, as ${agent} (role ${role}, capsules ${scope.join(", ")}).\n` +
+    'Before changing a file, run `capsules explain <file>`. Never weaken an existing test; if one looks wrong, run `capsules propose <test file> --why "<reason>"` and carry on.\n',
+  sessionNoDefault: () =>
+    "capsules: permissions.yaml has no `default` agent, so no session was opened. Edits are checked as `default` and will be refused until it is added.\n",
   notAllowedWhy:
     "permissions.yaml says who may change what, so an agent can't change parts it has no business touching.",
   notAllowedFix: (action: string) =>
     action === "change-checks"
-      ? "leave existing tests as they are and fix the code instead. If the test itself is wrong, say so and stop: a human, or the test-maintainer agent in its own session, can change it."
+      ? "leave existing tests as they are and fix the code instead. If the test itself looks wrong, propose a change (capsules propose <test file> --why ...): a human, or the test-maintainer agent in its own session, can change it."
       : action === "edit-config" || action === "edit-permissions"
         ? "don't change this file; ask a human owner to make the change."
         : `ask a human owner, or an agent whose role and scope include ${action}, to make this change.`,
   v1Why: "an agent could make a test pass by weakening the test.",
   v1Fix:
-    "don't change the test in this session. Fix the code so the existing test passes. If the test is wrong, say so: the test-maintainer agent can change it in a separate session, with owner approval.",
+    "don't change the test in this session. Fix the code so the existing test passes. If the test is wrong, propose a change (capsules propose <test file> --why ...): the test-maintainer agent can change it in a separate session, with owner approval.",
   v2Why:
     "a rule can be made to fit by quietly rewriting the reason it exists, and no one would see the drift.",
   v2Fix:

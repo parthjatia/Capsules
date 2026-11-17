@@ -8,7 +8,7 @@ export interface HookGroup {
 }
 type Settings = Record<string, unknown> & { hooks?: Record<string, HookGroup[]> };
 
-const OURS = /(capsules|cli\.js)\S*["']?\s+hook\s+(pre-edit|pre-bash|stop)\s*$/;
+const OURS = /(capsules|cli\.js)\S*["']?\s+hook\s+(pre-edit|pre-bash|stop|session-start)\s*$/;
 
 export function isOurs(command: string): boolean {
   return OURS.test(command.trim());
@@ -18,6 +18,7 @@ export function isOurs(command: string): boolean {
 export function ourHooks(cli: string): Record<string, HookGroup[]> {
   const cmd = (event: string) => `node "${cli}" hook ${event}`;
   return {
+    SessionStart: [{ hooks: [{ type: "command", command: cmd("session-start"), timeout: 30 }] }],
     PreToolUse: [
       {
         matcher: "Edit|Write|MultiEdit|NotebookEdit",

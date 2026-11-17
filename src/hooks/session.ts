@@ -1,6 +1,6 @@
 // Sessions (C8) and what each session has changed, so the hooks can apply the one rule
 // within a session (C6.2, D-024). Everything lives in .capsules/_cache/sessions/.
-import { randomBytes } from "node:crypto";
+import { createHash, randomBytes } from "node:crypto";
 import { existsSync, mkdirSync, readFileSync, renameSync, rmSync, writeFileSync } from "node:fs";
 import { join } from "node:path";
 import type { Perms } from "../core/access.js";
@@ -53,6 +53,57 @@ function readJson<T>(path: string): T | null {
 export function activeWorkSession(root: string, env = process.env): WorkSession | null {
   const id = env.CAPSULES_SESSION?.trim() || readCurrent(root);
   return id ? readJson<WorkSession>(join(dir(root), `${safe(id)}.json`)) : null;
+}
+
+/** C18.1: the automatic session of one Claude Code session is `cc-` + 16 hex of its SHA-256. */
+export function autoSessionId(claudeSessionId: string): string {
+  return "cc-" + createHash("sha256").update(claudeSessionId).digest("hex").slice(0, 16);
+}
+
+/** The automatic session opened for this Claude Code session, if there is one. */
+export function autoSession(root: string, claudeSessionId: string | undefined): WorkSession | null {
+  if (!claudeSessionId) return null;
+  return readJson<WorkSession>(join(dir(root), `${autoSessionId(claudeSessionId)}.json`));
+}
+
+/**
+ * Open (or reopen, on resume) the automatic session of a Claude Code session (C18.1). It
+ * never becomes the repo's "current" session, so parallel windows keep their own.
+ */
+export function openAutoSession(
+  root: string,
+  claudeSessionId: string,
+  agent: string,
+  role: string,
+  capsules: string[],
+): { session: WorkSession; reopened: boolean } {
+  const id = autoSessionId(claudeSessionId);
+  const path = join(dir(root), `${id}.json`);
+  const old = readJson<WorkSession>(path);
+  if (old) return { session: old, reopened: true };
+  const s: WorkSession = {
+    format: "0.1",
+    id,
+    agent,
+    role,
+    capsules,
+    started: new Date().toISOString(),
+  };
+  writeJson(path, s);
+  return { session: s, reopened: false };
+}
+
+/** `capsules work` inside an automatic session narrows it: same id, same tracking (C18.1). */
+export function narrowWorkSession(
+  root: string,
+  s: WorkSession,
+  agent: string,
+  role: string,
+  capsules: string[],
+): WorkSession {
+  const next: WorkSession = { ...s, agent, role, capsules };
+  writeJson(join(dir(root), `${safe(s.id)}.json`), next);
+  return next;
 }
 
 function readCurrent(root: string): string | null {
@@ -110,7 +161,9 @@ export function resolveActor(
   perms: Perms,
   env = process.env,
 ): HookActor {
-  const work = activeWorkSession(root, env);
+  // C18.1: this Claude Code session's own automatic session comes first, so parallel windows
+  // never use each other's; then CAPSULES_SESSION or the repo's current session (C8).
+  const work = autoSession(root, input.session_id) ?? activeWorkSession(root, env);
   const trackKey = work ? `work-${work.id}` : `claude-${input.session_id ?? "unknown"}`;
   if (input.agent_type && perms.agents[input.agent_type]) {
     const agent = input.agent_type;

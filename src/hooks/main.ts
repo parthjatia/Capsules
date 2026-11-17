@@ -38,8 +38,15 @@ export async function runHook(args: string[], io: HookIo = processHookIo()): Pro
       if (root && file) (await import("./commit-msg.js")).commitMsg(root, file, io.env);
       return 0;
     }
-    if (event !== "pre-edit" && event !== "pre-bash" && event !== "stop") {
-      io.err(`error  unknown hook "${event ?? ""}". Use pre-edit, pre-bash, stop or commit-msg.\n`);
+    if (
+      event !== "pre-edit" &&
+      event !== "pre-bash" &&
+      event !== "stop" &&
+      event !== "session-start"
+    ) {
+      io.err(
+        `error  unknown hook "${event ?? ""}". Use session-start, pre-edit, pre-bash, stop or commit-msg.\n`,
+      );
       return 64;
     }
     const raw = io.stdin();
@@ -53,6 +60,11 @@ export async function runHook(args: string[], io: HookIo = processHookIo()): Pro
     }
     const index: HookIndex = await loadIndex(root);
     onError = index.config.onError;
+    if (event === "session-start") {
+      const text = (await import("./session-start.js")).sessionStart(input, root, index, io.env);
+      if (text) io.out(text);
+      return 0;
+    }
     const result: HookResult =
       event === "pre-edit"
         ? await (await import("./pre-edit.js")).preEdit(input, root, index, io.env)
@@ -64,7 +76,8 @@ export async function runHook(args: string[], io: HookIo = processHookIo()): Pro
     if (result.notice) io.out(JSON.stringify({ systemMessage: result.notice }) + "\n");
     return 0;
   } catch (err) {
-    if (event === "stop" || event === "commit-msg") return 0; // report-only: never in the way
+    // Report-only events: never in the way.
+    if (event === "stop" || event === "commit-msg" || event === "session-start") return 0;
     io.err(hookMsg.crashed(err instanceof Error ? err.message : String(err), onError === "open"));
     return onError === "open" ? 1 : 2;
   }
